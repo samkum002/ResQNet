@@ -7,13 +7,9 @@ import java.util.List;
 import org.bson.types.ObjectId;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import lombok.AllArgsConstructor;
+import lombok.*;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -21,20 +17,15 @@ import lombok.Setter;
 @Getter
 @Setter
 @AllArgsConstructor
+@NoArgsConstructor
 @Document(collection = "users")
 public class userEntity {
     
     @Id
     private ObjectId userId;
-    @NotBlank(message = "Email cannot be blank")
-    @Email(message="Enter valid Email")
     private String email;
-    @NotBlank(message = "Enter a password")
-    @Size(min=6,max=30,message="Password must be between 8 and 30")
     private String password;
     private List<String> Roles = new ArrayList<>();
-    @NotBlank(message = "username cannot be blank")
-    @Indexed(unique=true)
     private String username;
     private Integer trustScore;
     @CreatedDate
