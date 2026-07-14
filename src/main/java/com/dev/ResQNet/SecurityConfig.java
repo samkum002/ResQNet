@@ -30,6 +30,19 @@ public class SecurityConfig {
 
             .httpBasic(Customizer.withDefaults());
 
+//             .formLogin(form -> form
+//                 .loginPage("/login.html")
+//                 .loginProcessingUrl("/user/login") // spring security intercepts it
+//                 .successHandler(customLogin)
+//                 .failureUrl("/login.html?error=true")
+//                 .permitAll()
+//         )
+
+//             .logout(logout -> logout
+//                 .logoutUrl("/logout")
+//                 .logoutSuccessHandler(customLogout)
+//             );
+
             return http.build();
 
     }

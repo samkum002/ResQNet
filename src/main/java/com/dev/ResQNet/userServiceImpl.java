@@ -1,15 +1,13 @@
 package com.dev.ResQNet;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-
-import java.util.*;
-
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
 
 
 @Service
@@ -33,10 +31,11 @@ public class userServiceImpl implements userService{
         entity.setEmail(dto.getEmail());
         entity.setRoles(Arrays.asList("USER"));
         entity.setTrustScore(50);
+        // entity.setAdminState("UTTAR PRADESH");
+        // entity.setActiveIncidents(0);
         entity.setCreatedAt(LocalDateTime.now());
-        userEntity saved = repo.save(entity);
-        System.out.println(saved.getUserId());
-        // repo.save(entity);
+        // entity.setAdminStatus(Admin.AVAILABLE);
+        repo.save(entity);
         return ResponseEntity.ok("User registered successfully");
     }
 
