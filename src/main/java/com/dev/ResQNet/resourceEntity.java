@@ -16,7 +16,7 @@ public class resourceEntity {
     
     @Id
     public ObjectId resourceId;
-    public ObjectId statioId;
+    public ObjectId stationId;
     public Integer availablePersonnel;
     public Integer availableVehicle;
 }

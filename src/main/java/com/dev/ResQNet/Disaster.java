@@ -1,0 +1,6 @@
+package com.dev.ResQNet;
+
+public enum Disaster {
+    
+    FIRE,LANDSLIDE,BUILDING_COLLAPSE,EARTHQUAKE,ROAD_ACCIDENT,ELECTRICAL_HAZARD;
+}

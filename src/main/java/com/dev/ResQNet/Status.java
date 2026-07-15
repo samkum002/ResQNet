@@ -1,0 +1,10 @@
+package com.dev.ResQNet;
+
+/**
+ * Status
+ */
+public enum Status {
+
+    REPORTED,AI_PROGRESS,UNDER_REVIEW,VERIFIED,DISPATCHED,COMPLETED,REJECTED,FALSE;
+
+}
