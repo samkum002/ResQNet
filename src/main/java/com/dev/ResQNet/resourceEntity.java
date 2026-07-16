@@ -19,4 +19,6 @@ public class resourceEntity {
     public ObjectId stationId;
     public Integer availablePersonnel;
     public Integer availableVehicle;
+    public Integer totalPersonnel;
+    public Integer totalVehicle;
 }

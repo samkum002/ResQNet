@@ -20,10 +20,12 @@ public class stationEntity {
     
     @Id
     private ObjectId stationId;
+    private Forces forceType;
     private String stationName;
     private Station status;
     @GeoSpatialIndexed(type=GeoSpatialIndexType.GEO_2DSPHERE)
     private GeoJsonPoint location;
     @Version
     private Long version;
+    private String state;
 }

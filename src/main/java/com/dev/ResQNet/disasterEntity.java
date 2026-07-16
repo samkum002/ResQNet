@@ -42,5 +42,6 @@ public class disasterEntity {
     private Boolean reAssigned;
     private ObjectId stationId;
     private Set<Disaster> disasterType = new HashSet<>();
-    // private image;
+    private Set<Forces> forces = new HashSet<>();
+    private ObjectId image;
 }
