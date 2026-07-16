@@ -32,6 +32,8 @@ public class disasterEntity {
     private Integer aiConfidence;
     private Integer finalConfidence;
     @CreatedDate
+    private LocalDateTime createdAt;
+    @CreatedDate
     private LocalDateTime dispatchedAt;
     @LastModifiedDate
     private LocalDateTime completedAt;
@@ -39,6 +41,7 @@ public class disasterEntity {
     private String state;
     private ObjectId assignedAdminId;
     private Integer reportCount;
+    private Integer retryCount;
     private Boolean reAssigned;
     private ObjectId stationId;
     private Set<Disaster> disasterType = new HashSet<>();
