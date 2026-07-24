@@ -29,6 +29,9 @@ public class disasterController {
     disasterRepo disasterrepo;
 
     @Autowired
+    disasterService disasterservice;
+
+    @Autowired
     userRepo userrepo;
     
     @PostMapping("/image-upload")
@@ -50,6 +53,8 @@ public class disasterController {
         disaster.setLocation(new GeoJsonPoint(longitude,latitude));
         disaster.setReAssigned(false);
         byte[] image_bytes = image.getBytes();
+        disasterservice.aiAnalyzer(image_bytes);
+        disaster.setAiStatus(AI.PROCESSING);
         InputStream image_to_stream = new ByteArrayInputStream(image_bytes);
         ObjectId image_store = gridFsTemplate.store(image_to_stream,image.getOriginalFilename(),image.getContentType());
         disaster.setImage(image_store);
