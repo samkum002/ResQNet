@@ -1,20 +1,31 @@
 package com.dev.ResQNet;
 
 
+import java.io.IOException;
+import java.util.List;
+
+import org.bson.types.ObjectId;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.content.Media;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.mongodb.gridfs.GridFsTemplate;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MimeTypeUtils;
-
 
 @Service
 public class disasterServiceImpl implements disasterService{
     
     @Autowired
     disasterRepo disasterrepo;
+
+    @Autowired
+    aiAnalyzerService aiAnalyzerService;
+
+    @Autowired
+    GridFsTemplate gridFsTemplate;
 
     private final ChatClient chatClient;
 
@@ -81,12 +92,23 @@ public class disasterServiceImpl implements disasterService{
             disasterrepo.save(disasterentity);
         }
         catch(Exception e){
-
+            disasterEntity disasterentity = new disasterEntity();
+            disasterentity.setRetryCount(disasterentity.getRetryCount()+1);
+            disasterentity.setAiStatus(AI.FAILED);
+            disasterrepo.save(disasterentity);
         }
 
-        
+    }
 
+    @Override
+    @Scheduled(cron = "0 */3 * * * ?")
+    public void failedAi() throws IllegalStateException, IOException {
 
+        List<disasterEntity> aiFailed = disasterrepo.findByAiStatusAndRetryCountLessThan(AI.FAILED,5);
 
+        for(disasterEntity de : aiFailed){
+            ObjectId imageId = de.getImage();
+            aiAnalyzerService.getFile(imageId);
+        }
     }
 }

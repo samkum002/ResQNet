@@ -62,3 +62,4 @@ public class disasterController {
         return ResponseEntity.ok(new reportResponse(disaster.getDisasterId(),"Reported Successfully",disaster.getStatus()));
     }
 }
+//
