@@ -23,17 +23,20 @@ import org.springframework.web.multipart.MultipartFile;
 public class disasterController {
 
     @Autowired
-    GridFsTemplate gridFsTemplate;
+    private GridFsTemplate gridFsTemplate;
 
     @Autowired
-    disasterRepo disasterrepo;
+    private disasterRepo disasterrepo;
 
     @Autowired
-    disasterService disasterservice;
+    private aiAnalyzerService aiAnalyzerservice;
 
     @Autowired
-    userRepo userrepo;
-    
+    private disasterService disasterservice;
+
+    @Autowired
+    private userRepo userrepo;
+
     @PostMapping("/image-upload")
     public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude) throws IOException{
 
@@ -53,7 +56,7 @@ public class disasterController {
         disaster.setLocation(new GeoJsonPoint(longitude,latitude));
         disaster.setReAssigned(false);
         byte[] image_bytes = image.getBytes();
-        disasterservice.aiAnalyzer(image_bytes);
+        aiAnalyzerservice.aiAnalyzer(image_bytes);
         disaster.setAiStatus(AI.PROCESSING);
         InputStream image_to_stream = new ByteArrayInputStream(image_bytes);
         ObjectId image_store = gridFsTemplate.store(image_to_stream,image.getOriginalFilename(),image.getContentType());
@@ -62,4 +65,3 @@ public class disasterController {
         return ResponseEntity.ok(new reportResponse(disaster.getDisasterId(),"Reported Successfully",disaster.getStatus()));
     }
 }
-//

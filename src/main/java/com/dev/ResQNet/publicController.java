@@ -11,7 +11,7 @@ import jakarta.validation.Valid;
 public class publicController {
     
     @Autowired
-    userService service;
+    private userService service;
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody userDTO dto){
