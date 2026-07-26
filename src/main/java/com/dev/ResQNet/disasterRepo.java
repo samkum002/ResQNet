@@ -9,4 +9,6 @@ public interface disasterRepo extends MongoRepository<disasterEntity, ObjectId>{
     
     List<disasterEntity> findByAiStatusAndRetryCountLessThan(AI ai,Integer retryCount);
     ObjectId  findImageByDisasterId(ObjectId disasterId);
+
+    disasterEntity findByDisasterId(ObjectId disasterId);
 }

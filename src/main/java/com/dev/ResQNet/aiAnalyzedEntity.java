@@ -12,7 +12,6 @@ import lombok.Setter;
 @NoArgsConstructor
 public class aiAnalyzedEntity {
     
-    private AI aiStatus;
     private Severity severity;
     private Integer aiConfidence;
     private Set<Disaster> disasterType = new HashSet<>();

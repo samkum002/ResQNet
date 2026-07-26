@@ -56,12 +56,14 @@ public class disasterController {
         disaster.setLocation(new GeoJsonPoint(longitude,latitude));
         disaster.setReAssigned(false);
         byte[] image_bytes = image.getBytes();
-        aiAnalyzerservice.aiAnalyzer(image_bytes);
-        disaster.setAiStatus(AI.PROCESSING);
         InputStream image_to_stream = new ByteArrayInputStream(image_bytes);
-        ObjectId image_store = gridFsTemplate.store(image_to_stream,image.getOriginalFilename(),image.getContentType());
+        String content = image.getContentType();
+        ObjectId image_store = gridFsTemplate.store(image_to_stream,image.getOriginalFilename(),content);
         disaster.setImage(image_store);
         disasterrepo.save(disaster);
+        ObjectId disasterId = disaster.getDisasterId();
+        aiAnalyzerservice.aiAnalyzer(image_bytes,disasterId,content);
+        disaster.setAiStatus(AI.PROCESSING);
         return ResponseEntity.ok(new reportResponse(disaster.getDisasterId(),"Reported Successfully",disaster.getStatus()));
     }
 }
