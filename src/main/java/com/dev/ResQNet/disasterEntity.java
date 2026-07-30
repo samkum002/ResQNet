@@ -1,7 +1,9 @@
 package com.dev.ResQNet;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.HashSet;
+import java.util.Set;
+
 import org.bson.types.ObjectId;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
@@ -37,6 +39,8 @@ public class disasterEntity {
     private LocalDateTime dispatchedAt;
     @LastModifiedDate
     private LocalDateTime completedAt;
+    @CreatedDate
+    private LocalDateTime AssignedAt;
     private Boolean suspicious;
     private String state;
     private ObjectId assignedAdminId;
