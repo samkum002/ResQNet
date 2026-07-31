@@ -25,6 +25,9 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
     private GridFsTemplate gridFsTemplate;
 
     @Autowired
+    private adminDashboardService dashboardService;
+
+    @Autowired
     private disasterRepo disasterrepo;
 
     private final ChatClient chatClient;
@@ -54,7 +57,7 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
     public void aiAnalyzer(byte[] image_bytes,ObjectId disasterId,String content){
 
         Media m = new Media(MimeTypeUtils.parseMimeType(content),new ByteArrayResource(image_bytes));
-        System.out.println("Analyzing image for disasterId: " + disasterId);
+        // System.out.println("Analyzing image for disasterId: " + disasterId);
 
         try{
             String rawResponse = chatClient.prompt().system("""
@@ -116,12 +119,14 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
                 ObjectMapper objectMapper = new ObjectMapper();
                 aiAnalyzedEntity aiEntity = objectMapper.readValue(cleanJson, aiAnalyzedEntity.class);
                 disasterEntity disasterentity = disasterrepo.findByDisasterId(disasterId);
+                disasterentity.setStatus(Status.AI_PROGRESS);
                 disasterentity.setAiStatus(AI.COMPLETED);
                 disasterentity.setAiConfidence(aiEntity.getAiConfidence());
                 disasterentity.setSeverity(aiEntity.getSeverity());
                 disasterentity.setForces(aiEntity.getForces());
                 disasterentity.setDisasterType(aiEntity.getDisasterType());
                 disasterrepo.save(disasterentity);
+                dashboardService.checkInfo(disasterId);
             }
         }
         catch(Exception e){

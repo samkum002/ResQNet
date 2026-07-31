@@ -46,7 +46,7 @@ public class disasterEntity {
     private ObjectId assignedAdminId;
     private Integer reportCount;
     private Integer retryCount;
-    private Boolean reAssigned;
+    private Assignment assignmentStatus;
     private ObjectId stationId;
     private Set<Disaster> disasterType = new HashSet<>();
     private Set<Forces> forces = new HashSet<>();

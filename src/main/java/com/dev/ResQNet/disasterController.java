@@ -37,7 +37,7 @@ public class disasterController {
     @Autowired
     private userRepo userrepo;
 
-    @PostMapping("/image-upload")
+    @PostMapping("/report")
     public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude) throws IOException{
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -54,7 +54,7 @@ public class disasterController {
         disaster.setRetryCount(0);
         disaster.setState(state);
         disaster.setLocation(new GeoJsonPoint(longitude,latitude));
-        disaster.setReAssigned(false);
+        disaster.setAssignmentStatus(Assignment.CREATED);
         byte[] image_bytes = image.getBytes();
         InputStream image_to_stream = new ByteArrayInputStream(image_bytes);
         String content = image.getContentType();

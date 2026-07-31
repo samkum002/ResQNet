@@ -23,7 +23,7 @@ public class customLogout implements LogoutSuccessHandler{
         String name = authentication.getName();
 
         userEntity u = repo.findByUsername(name);
-        u.setAdminStatus(Admin.AVAILABLE);
+        u.setAdminStatus(Admin.OFFLINE);
         repo.save(u);
 
         response.sendRedirect("/Login.html");
