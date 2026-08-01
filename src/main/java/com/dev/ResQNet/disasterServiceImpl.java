@@ -49,13 +49,13 @@ public class disasterServiceImpl implements disasterService{
         List<disasterEntity> aiFailed = disasterrepo.findByAiStatusAndRetryCount(AI.FAILED,5);
 
         for(disasterEntity de : aiFailed){
+            de.setAiStatus(AI.MANUAL_REVIEW);
+            disasterrepo.save(de);
             List<userEntity> admins = dashboardRepo.findByRolesContainingAndAdminState("ADMIN", de.getState());
             List<userEntity> filteredAdmins = admins.stream().filter(admin->admin.getAdminStatus()!=Admin.OFFLINE).toList();
             for(userEntity a : filteredAdmins){
                 template.convertAndSend("/topic/Disaster/"+a.getUserId(), de);
             }
-            de.setAiStatus(AI.MANUAL_REVIEW);
-            disasterrepo.save(de);
         }
     }
 

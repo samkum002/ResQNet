@@ -48,11 +48,23 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         entity.setAssignmentStatus(Assignment.ASSIGNED);
         sortedAdmin.setActiveIncidents(sortedAdmin.getActiveIncidents()+1);
         DisasterRepo.save(entity);
+        disasterDto dto = new disasterDto();
+        dto.setAiConfidence(entity.getAiConfidence());
+        dto.setAiStatus(entity.getAiStatus());
+        dto.setAssignmentStatus(entity.getAssignmentStatus());
+        dto.setDisasterType(entity.getDisasterType());
+        dto.setForces(entity.getForces());
+        dto.setFinalConfidence(entity.getFinalConfidence());
+        dto.setImage(entity.getImage());
+        dto.setState(entity.getState());
+        dto.setSeverity(entity.getSeverity());
+        dto.setSuspicious(entity.getSuspicious());
+        dto.setReportCount(entity.getReportCount());
         if(sortedAdmin.getActiveIncidents()>3){
             sortedAdmin.setAdminStatus(Admin.BUSY);
         }
         userrepo.save(sortedAdmin);
-        template.convertAndSend("/topic/Disaster/"+adminId, entity);
+        template.convertAndSend("/topic/Disaster/"+adminId, dto);
 
     }
 
@@ -68,12 +80,24 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         }
         List<disasterEntity> Alldisasters = DisasterRepo.findByAssignmentStatus(Assignment.TIMEOUT);
         for(disasterEntity entity : Alldisasters){
+            disasterDto dto = new disasterDto();
+            dto.setAiConfidence(entity.getAiConfidence());
+            dto.setAiStatus(entity.getAiStatus());
+            dto.setAssignmentStatus(entity.getAssignmentStatus());
+            dto.setDisasterType(entity.getDisasterType());
+            dto.setForces(entity.getForces());
+            dto.setFinalConfidence(entity.getFinalConfidence());
+            dto.setImage(entity.getImage());
+            dto.setState(entity.getState());
+            dto.setSeverity(entity.getSeverity());
+            dto.setSuspicious(entity.getSuspicious());
+            dto.setReportCount(entity.getReportCount());
             ObjectId adminId = entity.getAssignedAdminId();
             List<userEntity> admins = dashboardRepo.findByRolesContainingAndAdminState("ADMIN", entity.getState());
             List<userEntity> filteredAdmins = admins.stream().filter(admin->admin.getAdminStatus()!=Admin.OFFLINE).toList();
             for(userEntity admin : filteredAdmins){
                 if(!admin.getUserId().equals(adminId)){
-                    template.convertAndSend("/topic/Disaster/"+admin.getUserId(), entity);
+                    template.convertAndSend("/topic/Disaster/"+admin.getUserId(), dto);
                 }
             }
             entity.setAssignmentStatus(Assignment.REASSIGNED);
