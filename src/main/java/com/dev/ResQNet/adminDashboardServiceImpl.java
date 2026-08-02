@@ -48,6 +48,10 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         entity.setAssignmentStatus(Assignment.ASSIGNED);
         sortedAdmin.setActiveIncidents(sortedAdmin.getActiveIncidents()+1);
         DisasterRepo.save(entity);
+        if(sortedAdmin.getActiveIncidents()>3){
+            sortedAdmin.setAdminStatus(Admin.BUSY);
+        }
+        userrepo.save(sortedAdmin);
         disasterDto dto = new disasterDto();
         dto.setAiConfidence(entity.getAiConfidence());
         dto.setAiStatus(entity.getAiStatus());
@@ -60,10 +64,6 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         dto.setSeverity(entity.getSeverity());
         dto.setSuspicious(entity.getSuspicious());
         dto.setReportCount(entity.getReportCount());
-        if(sortedAdmin.getActiveIncidents()>3){
-            sortedAdmin.setAdminStatus(Admin.BUSY);
-        }
-        userrepo.save(sortedAdmin);
         template.convertAndSend("/topic/Disaster/"+adminId, dto);
 
     }

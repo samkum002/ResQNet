@@ -51,10 +51,22 @@ public class disasterServiceImpl implements disasterService{
         for(disasterEntity de : aiFailed){
             de.setAiStatus(AI.MANUAL_REVIEW);
             disasterrepo.save(de);
+            disasterDto dto = new disasterDto();
+            dto.setAiConfidence(de.getAiConfidence());
+            dto.setAiStatus(de.getAiStatus());
+            dto.setAssignmentStatus(de.getAssignmentStatus());
+            dto.setDisasterType(de.getDisasterType());
+            dto.setForces(de.getForces());
+            dto.setFinalConfidence(de.getFinalConfidence());
+            dto.setImage(de.getImage());
+            dto.setState(de.getState());
+            dto.setSeverity(de.getSeverity());
+            dto.setSuspicious(de.getSuspicious());
+            dto.setReportCount(de.getReportCount());
             List<userEntity> admins = dashboardRepo.findByRolesContainingAndAdminState("ADMIN", de.getState());
             List<userEntity> filteredAdmins = admins.stream().filter(admin->admin.getAdminStatus()!=Admin.OFFLINE).toList();
             for(userEntity a : filteredAdmins){
-                template.convertAndSend("/topic/Disaster/"+a.getUserId(), de);
+                template.convertAndSend("/topic/Disaster/"+a.getUserId(), dto);
             }
         }
     }
