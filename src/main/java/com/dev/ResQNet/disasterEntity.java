@@ -25,6 +25,7 @@ public class disasterEntity {
     
     @Id
     private ObjectId disasterId;
+    private ObjectId linkedDisasterId;
     private ObjectId userId;
     private Status status;
     private AI aiStatus;
@@ -32,7 +33,7 @@ public class disasterEntity {
     @GeoSpatialIndexed(type=GeoSpatialIndexType.GEO_2DSPHERE)
     private GeoJsonPoint location;
     private Integer aiConfidence;
-    private Integer finalConfidence;
+    private Double finalConfidence;
     @CreatedDate
     private LocalDateTime createdAt;
     @CreatedDate

@@ -8,4 +8,5 @@ public interface  aiAnalyzerService {
     
     void getFile(ObjectId id) throws IllegalStateException, IOException;
     void aiAnalyzer(byte[] image_bytes,ObjectId disasterId,String content);
+    
 }

@@ -1,14 +1,16 @@
 package com.dev.ResQNet;
 
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 
 import org.bson.types.ObjectId;
-import java.time.LocalDateTime;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
 
+@Service
 public class adminDashboardServiceImpl implements adminDashboardService{
 
     @Autowired
@@ -103,5 +105,15 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             entity.setAssignmentStatus(Assignment.REASSIGNED);
             DisasterRepo.save(entity);
         }
+    }
+
+    @Override
+    public void calculateFinalVal(ObjectId disasterId){
+        disasterEntity disaster = DisasterRepo.findByDisasterId(disasterId);
+        userEntity user = userrepo.findByUserId(disaster.getUserId());
+        Double trust = 0.2*user.getTrustScore();
+        Double finalVal = ((0.5)*disaster.getAiConfidence()+trust+disaster.getReportCount()*0.3);
+        disaster.setFinalConfidence(finalVal);
+        DisasterRepo.save(disaster);
     }
 }

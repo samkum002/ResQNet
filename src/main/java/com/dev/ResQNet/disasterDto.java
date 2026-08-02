@@ -17,7 +17,7 @@ public class disasterDto {
     private AI aiStatus;
     private Severity severity;
     private Integer aiConfidence;
-    private Integer finalConfidence;
+    private Double finalConfidence;
     private Boolean suspicious;
     private String state;
     private Integer reportCount;

@@ -30,6 +30,9 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
     @Autowired
     private disasterRepo disasterrepo;
 
+    @Autowired
+    private userRepo userrepo;
+
     private final ChatClient chatClient;
 
     public aiAnalyzerServiceImpl(ChatClient.Builder builder){
@@ -126,8 +129,9 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
                 disasterentity.setForces(aiEntity.getForces());
                 disasterentity.setDisasterType(aiEntity.getDisasterType());
                 disasterrepo.save(disasterentity);
-                dashboardService.checkInfo(disasterId);
             }
+            dashboardService.calculateFinalVal(disasterId);
+            dashboardService.checkInfo(disasterId);
         }
         catch(Exception e){
             disasterEntity disasterentity = disasterrepo.findByDisasterId(disasterId);

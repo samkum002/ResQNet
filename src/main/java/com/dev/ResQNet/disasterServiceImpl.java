@@ -29,6 +29,12 @@ public class disasterServiceImpl implements disasterService{
     @Autowired
     adminDashboardRepo dashboardRepo;
 
+    @Autowired
+    userRepo userrepo;
+
+    @Autowired
+    adminDashboardService dashboardService;
+
 
     @Override
     @Scheduled(cron = "0 */3 * * * ?")
@@ -51,6 +57,7 @@ public class disasterServiceImpl implements disasterService{
         for(disasterEntity de : aiFailed){
             de.setAiStatus(AI.MANUAL_REVIEW);
             disasterrepo.save(de);
+            dashboardService.calculateFinalVal(de.getDisasterId());
             disasterDto dto = new disasterDto();
             dto.setAiConfidence(de.getAiConfidence());
             dto.setAiStatus(de.getAiStatus());

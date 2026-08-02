@@ -54,7 +54,7 @@ public class disasterController {
         disaster.setReportCount(1);
         disaster.setRetryCount(0);
         disaster.setAiConfidence(0);
-        disaster.setFinalConfidence(0);
+        disaster.setFinalConfidence(0.0);
         disaster.setState(state);
         disaster.setLocation(new GeoJsonPoint(longitude,latitude));
         disaster.setAssignmentStatus(Assignment.CREATED);
