@@ -18,12 +18,18 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+import jakarta.validation.Valid;
+
 @RestController
 @RequestMapping("/disaster")
 public class disasterController {
 
     @Autowired
     private GridFsTemplate gridFsTemplate;
+
+    @Autowired
+    private adminDashboardService dashboardService;
 
     @Autowired
     private disasterRepo disasterrepo;
@@ -38,7 +44,7 @@ public class disasterController {
     private userRepo userrepo;
 
     @PostMapping("/report")
-    public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude) throws IOException{
+    public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude,@Valid @RequestBody reportDto dto) throws IOException{
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
@@ -48,6 +54,7 @@ public class disasterController {
         }
         ObjectId userId = user.getUserId();
         disasterEntity disaster = new disasterEntity();
+        disaster.setUserReport(dto.getUserReport());
         disaster.setUserId(userId);
         disaster.setStatus(Status.REPORTED);
         disaster.setCreatedAt(LocalDateTime.now());
@@ -65,8 +72,11 @@ public class disasterController {
         disaster.setImage(image_store);
         disasterrepo.save(disaster);
         ObjectId disasterId = disaster.getDisasterId();
-        aiAnalyzerservice.aiAnalyzer(image_bytes,disasterId,content);
-        disaster.setAiStatus(AI.PROCESSING);
+        boolean isDuplicate = dashboardService.checkDuplicateDisasters(latitude, longitude,disaster.getState(),disasterId);
+        if(!isDuplicate){
+            aiAnalyzerservice.aiAnalyzer(image_bytes,disasterId,content);
+            disaster.setAiStatus(AI.PROCESSING);
+        }
         return ResponseEntity.ok(new reportResponse(disaster.getDisasterId(),"Reported Successfully",disaster.getStatus()));
     }
 }

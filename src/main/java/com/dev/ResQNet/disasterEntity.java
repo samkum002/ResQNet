@@ -52,4 +52,5 @@ public class disasterEntity {
     private Set<Disaster> disasterType = new HashSet<>();
     private Set<Forces> forces = new HashSet<>();
     private ObjectId image;
+    private String userReport;
 }

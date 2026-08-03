@@ -8,5 +8,6 @@ public interface  adminDashboardService {
     void findAdmin(ObjectId disasterId);
     void reassignDisaster();
     void calculateFinalVal(ObjectId disasterId);
+    boolean checkDuplicateDisasters(double latitude,double longitude,String state,ObjectId disasterId);
     
 }

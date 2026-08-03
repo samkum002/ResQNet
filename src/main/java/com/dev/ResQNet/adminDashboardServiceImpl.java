@@ -6,6 +6,10 @@ import java.util.List;
 
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -24,6 +28,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
 
     @Autowired
     disasterRepo DisasterRepo;
+
+    @Autowired
+    private MongoTemplate mongoTemplate;
     
     @Override
     public void checkInfo(ObjectId disasterId){
@@ -115,5 +122,38 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         Double finalVal = ((0.5)*disaster.getAiConfidence()+trust+disaster.getReportCount()*0.3);
         disaster.setFinalConfidence(finalVal);
         DisasterRepo.save(disaster);
+    }
+
+    @Override
+    public boolean checkDuplicateDisasters(double latitude,double longitude,String state,ObjectId disasterId){
+        Query query = new Query();
+        query.addCriteria(Criteria.where("state").is(state));
+        query.addCriteria(Criteria.where("status").in(Status.UNDER_REVIEW,Status.AI_PROGRESS,Status.BACKUP_DISPATCHED));
+        query.addCriteria(Criteria.where("location").nearSphere(new GeoJsonPoint(longitude, latitude)).maxDistance(500.0/6378137.0));
+        List<disasterEntity> disasters = mongoTemplate.find(query,disasterEntity.class);
+        if(disasters.isEmpty()){
+            return false;
+        }
+        disasterEntity dnew = DisasterRepo.findByDisasterId(disasterId);
+        for(disasterEntity entity : disasters){
+            if(entity.getUserReport().equalsIgnoreCase(dnew.getUserReport())){
+                entity.setReportCount(entity.getReportCount()+1);
+                DisasterRepo.save(entity);
+                calculateFinalVal(entity.getDisasterId());
+                dnew.setStatus(Status.ALREADY_PRESENT);
+                dnew.setAssignmentStatus(Assignment.ASSIGNED);
+                dnew.setAssignedAdminId(entity.getAssignedAdminId());
+                dnew.setLinkedDisasterId(entity.getDisasterId());
+                DisasterRepo.save(dnew);
+                duplicateDisasterDto dto = new duplicateDisasterDto();
+                dto.setDisasterId(entity.getDisasterId());
+                dto.setReportCount(entity.getReportCount());
+                dto.setFinalConfidence(entity.getFinalConfidence());
+                template.convertAndSend("/topic/disaster/"+dnew.getAssignedAdminId(),dto);
+                return true;
+
+            }
+        }
+        return false;
     }
 }
