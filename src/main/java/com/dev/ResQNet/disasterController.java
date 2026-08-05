@@ -20,6 +20,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 @RestController
 @RequestMapping("/disaster")
@@ -44,7 +46,7 @@ public class disasterController {
     private userRepo userrepo;
 
     @PostMapping("/report")
-    public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude,@Valid @RequestBody reportDto dto) throws IOException{
+    public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude,@NotBlank(message="Please Enter valid Disaster Cause in one word only.")@Pattern(regexp="^[A-Za-z]+$")@RequestParam("userReport") reportDto dto) throws IOException{
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
