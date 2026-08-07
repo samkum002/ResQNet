@@ -22,8 +22,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http){
 
         http
-            .csrf(csrf -> csrf.disable())
-
+        
             .authorizeHttpRequests(auth -> auth
                 .anyRequest().permitAll()
             )

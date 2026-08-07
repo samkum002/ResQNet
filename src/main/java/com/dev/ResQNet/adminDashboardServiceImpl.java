@@ -43,6 +43,8 @@ public class adminDashboardServiceImpl implements adminDashboardService{
     @Override
     public void findAdmin(ObjectId disasterId){
         disasterEntity entity = DisasterRepo.findByDisasterId(disasterId);
+        ObjectId userId = entity.getUserId();
+        userEntity user = userrepo.findByUserId(userId);
         entity.setAssignmentStatus(Assignment.PROCESSING);
         List<userEntity> admins = dashboardRepo.findByRolesContainingAndAdminStateAndAdminStatus("ADMIN",entity.getState(),Admin.AVAILABLE);
         if(admins.isEmpty()){
@@ -57,6 +59,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         entity.setAssignmentStatus(Assignment.ASSIGNED);
         sortedAdmin.setActiveIncidents(sortedAdmin.getActiveIncidents()+1);
         DisasterRepo.save(entity);
+        template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(entity.getDisasterId(),"Disaster is under review.",entity.getStatus()));
         if(sortedAdmin.getActiveIncidents()>3){
             sortedAdmin.setAdminStatus(Admin.BUSY);
         }

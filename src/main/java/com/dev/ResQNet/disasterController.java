@@ -10,15 +10,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.data.mongodb.gridfs.GridFsTemplate;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -37,6 +39,9 @@ public class disasterController {
     private disasterRepo disasterrepo;
 
     @Autowired
+    private SimpMessagingTemplate template;
+
+    @Autowired
     private aiAnalyzerService aiAnalyzerservice;
 
     @Autowired
@@ -45,8 +50,13 @@ public class disasterController {
     @Autowired
     private userRepo userrepo;
 
+    @GetMapping("/csrf")
+    public CsrfToken csrf(CsrfToken token) {
+        return token;
+    }
+
     @PostMapping("/report")
-    public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude,@NotBlank(message="Please Enter valid Disaster Cause in one word only.")@Pattern(regexp="^[A-Za-z]+$")@RequestParam("userReport") reportDto dto) throws IOException{
+    public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude,@Valid @NotBlank(message="Please Enter valid Disaster Cause in one word only.")@Pattern(regexp="^[A-Za-z]+$")@RequestParam("userReport") reportDto dto) throws IOException{
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
@@ -78,7 +88,10 @@ public class disasterController {
         if(!isDuplicate){
             aiAnalyzerservice.aiAnalyzer(image_bytes,disasterId,content);
             disaster.setAiStatus(AI.PROCESSING);
+            disasterrepo.save(disaster);
+            template.convertAndSendToUser(name, "/queue/report", new reportResponse(disaster.getDisasterId(),"AI analysis",disaster.getStatus()));
         }
+        template.convertAndSendToUser(name, "/queue/report", new reportResponse(disaster.getDisasterId(),"Reported Successfully",disaster.getStatus()));
         return ResponseEntity.ok(new reportResponse(disaster.getDisasterId(),"Reported Successfully",disaster.getStatus()));
     }
 }
