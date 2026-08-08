@@ -1,10 +1,11 @@
 package com.dev.ResQNet;
 
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 import org.bson.types.ObjectId;
+import org.springframework.http.ResponseEntity;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
@@ -67,6 +68,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         disasterDto dto = new disasterDto();
         dto.setAiConfidence(entity.getAiConfidence());
         dto.setAiStatus(entity.getAiStatus());
+        dto.setUserReport(entity.getUserReport());
         dto.setAssignmentStatus(entity.getAssignmentStatus());
         dto.setDisasterType(entity.getDisasterType());
         dto.setForces(entity.getForces());
@@ -97,6 +99,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             dto.setAiStatus(entity.getAiStatus());
             dto.setAssignmentStatus(entity.getAssignmentStatus());
             dto.setDisasterType(entity.getDisasterType());
+            dto.setUserReport(entity.getUserReport());
             dto.setForces(entity.getForces());
             dto.setFinalConfidence(entity.getFinalConfidence());
             dto.setImage(entity.getImage());
@@ -159,4 +162,29 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         }
         return false;
     }
+
+    @Override
+    public ResponseEntity<List<disasterDto>> disasterList(ObjectId userId){
+        List<disasterEntity> disasters = DisasterRepo.findByAssignedAdminId(userId);
+        List<disasterDto> dtos = new ArrayList<>();
+        for(disasterEntity entity : disasters){
+            disasterDto dto = new disasterDto();
+            dto.setAiConfidence(entity.getAiConfidence());
+            dto.setAiStatus(entity.getAiStatus());
+            dto.setDisasterType(entity.getDisasterType());
+            dto.setFinalConfidence(entity.getFinalConfidence());
+            dto.setForces(entity.getForces());
+            dto.setSeverity(entity.getSeverity());
+            dto.setReportCount(entity.getReportCount());
+            dto.setState(entity.getState());
+            dto.setAssignmentStatus(entity.getAssignmentStatus());
+            dto.setSuspicious(entity.getSuspicious());
+            dto.setImage(entity.getImage());
+            dto.setDisasterId(entity.getDisasterId());
+            dtos.add(dto);
+        }
+        return ResponseEntity.ok(dtos);
+    }
+
+
 }

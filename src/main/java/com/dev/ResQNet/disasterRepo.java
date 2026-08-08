@@ -12,4 +12,5 @@ public interface disasterRepo extends MongoRepository<disasterEntity, ObjectId>{
     ObjectId  findImageByDisasterId(ObjectId disasterId);
     List<disasterEntity> findByAssignmentStatus(Assignment assignmentStatus);
     disasterEntity findByDisasterId(ObjectId disasterId);
+    List<disasterEntity> findByAssignedAdminId(ObjectId userId);
 }

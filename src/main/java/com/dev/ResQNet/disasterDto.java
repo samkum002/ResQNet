@@ -20,10 +20,12 @@ public class disasterDto {
     private Double finalConfidence;
     private Boolean suspicious;
     private String state;
+    private String userReport;
     private Integer reportCount;
     private Assignment assignmentStatus;
     private Set<Disaster> disasterType = new HashSet<>();
     private Set<Forces> forces = new HashSet<>();
     private ObjectId image;
+     private ObjectId disasterId;
     
 }

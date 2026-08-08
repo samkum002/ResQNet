@@ -1,38 +1,34 @@
 package com.dev.ResQNet;
 
-import java.io.IOException;
+import java.util.List;
 
-import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.mongodb.gridfs.GridFsResource;
-import org.springframework.data.mongodb.gridfs.GridFsTemplate;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
 
-import com.mongodb.client.gridfs.model.GridFSFile;
 
 @RestController
-@RequestMapping("/fetch")
+@RequestMapping("/admin")
 public class adminDashboardController {
     
     @Autowired
-    disasterController controllerDisaster;
+    private adminDashboardService adminDashboardservice;
 
     @Autowired
-    GridFsTemplate template;
+    private userRepo userrepo;
 
-    @GetMapping("/image/{imageId}")
-    public ResponseEntity<byte[]> fetchImage(@PathVariable ObjectId imageId) throws IOException{
-        
-        GridFSFile gfs = template.findOne(Query.query(Criteria.where("_id").is(imageId)));
-        GridFsResource resource = template.getResource(gfs);
-
-        return ResponseEntity.ok().contentType(MediaType.parseMediaType(resource.getContentType())).body(resource.getInputStream().readAllBytes());
+    @GetMapping("/disasters")
+    public ResponseEntity<List<disasterDto>> disasterAssigned(){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String name = auth.getName();
+        userEntity user = userrepo.findByUsername(name);
+        if(user==null){
+            ResponseEntity.notFound().build();
+        }
+        return adminDashboardservice.disasterList(user.getUserId());
     }
 }
