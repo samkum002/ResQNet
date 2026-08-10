@@ -25,7 +25,7 @@ public class userEntity {
     private ObjectId userId;
     private String email;
     private String password;
-    private List<String> Roles = new ArrayList<>();
+    private List<String> roles = new ArrayList<>();
     private String username;
     private Integer trustScore;
     @CreatedDate

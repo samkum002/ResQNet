@@ -100,7 +100,23 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
                 ROAD_ACCIDENT
                 ELECTRICAL_HAZARD
 
-            4. Forces
+            4. Forces 
+            - Prioritize forces according to the immediate emergency response needs visible or reasonably inferable from the image.
+
+                1. The force directly responsible for controlling the primary visible
+                disaster should receive the highest priority.
+                2. Give high priority to medical/ambulance response when the incident
+                could reasonably involve injured or trapped people.
+                3. Give police priority when crowd control, evacuation, traffic control,
+                or securing the scene is relevant.
+                4. Give electricity department priority only when an electrical hazard,
+                electrical fire, exposed wiring, transformers, or similar evidence
+                is visible or reasonably inferable.
+                5. Give NDRF/SDRF priority only when the image provides evidence that
+                specialized disaster rescue is required.
+                
+            - Do not rank a force highly merely because it is potentially useful.
+            - Prioritize based on the immediate needs of this specific incident.
             - Return a JSON array.
             - Use ONLY these enum values:
                 FIRE_DEPARTMENT
@@ -109,6 +125,9 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
                 SDRF
                 NDRF
                 ELECTRICITY_DEPARTMENT
+
+            - Return ONLY the specified JSON fields.
+            - Do not include reasoningSummary or any other fields.
             """)
             .user(u->u.text("Analyze the uploaded image thoroughly").media(m)).call().content();
             
@@ -130,8 +149,6 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
                 disasterentity.setDisasterType(aiEntity.getDisasterType());
                 disasterrepo.save(disasterentity);
             }
-            dashboardService.calculateFinalVal(disasterId);
-            dashboardService.checkInfo(disasterId);
         }
         catch(Exception e){
             disasterEntity disasterentity = disasterrepo.findByDisasterId(disasterId);
@@ -139,7 +156,10 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
             disasterentity.setAiStatus(AI.FAILED);
             disasterrepo.save(disasterentity);
             e.printStackTrace();
+            return;
         }
+        dashboardService.calculateFinalVal(disasterId);
+        dashboardService.checkInfo(disasterId);
 
     }
 

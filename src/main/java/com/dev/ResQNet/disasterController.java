@@ -50,13 +50,13 @@ public class disasterController {
     @Autowired
     private userRepo userrepo;
 
-    @GetMapping("/csrf")
-    public CsrfToken csrf(CsrfToken token) {
-        return token;
-    }
+    // @GetMapping("/csrf")
+    // public CsrfToken csrf(CsrfToken token) {
+    //     return token;
+    // }
 
     @PostMapping("/report")
-    public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude,@Valid @NotBlank(message="Please Enter valid Disaster Cause in one word only.")@Pattern(regexp="^[A-Za-z]+$")@RequestParam("userReport") reportDto dto) throws IOException{
+    public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude,@Valid @NotBlank(message="Please Enter valid Disaster Cause in one word only.")@Pattern(regexp="^[A-Za-z]+$")@RequestParam("userReport") String userReport) throws IOException{
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
@@ -66,7 +66,7 @@ public class disasterController {
         }
         ObjectId userId = user.getUserId();
         disasterEntity disaster = new disasterEntity();
-        disaster.setUserReport(dto.getUserReport());
+        disaster.setUserReport(userReport);
         disaster.setUserId(userId);
         disaster.setStatus(Status.REPORTED);
         disaster.setCreatedAt(LocalDateTime.now());

@@ -1,19 +1,22 @@
 package com.dev.ResQNet;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 
 import org.bson.types.ObjectId;
-import org.springframework.http.ResponseEntity;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class adminDashboardServiceImpl implements adminDashboardService{
@@ -50,6 +53,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         List<userEntity> admins = dashboardRepo.findByRolesContainingAndAdminStateAndAdminStatus("ADMIN",entity.getState(),Admin.AVAILABLE);
         if(admins.isEmpty()){
             entity.setAssignmentStatus(Assignment.TIMEOUT);
+            DisasterRepo.save(entity);
             return;
         }
         userEntity sortedAdmin = admins.stream().min(Comparator.comparingInt(userEntity::getActiveIncidents)).orElseThrow();
@@ -165,7 +169,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
 
     @Override
     public ResponseEntity<List<disasterDto>> disasterList(ObjectId userId){
-        List<disasterEntity> disasters = DisasterRepo.findByAssignedAdminId(userId);
+        List<disasterEntity> disasters = DisasterRepo.findByAssignedAdminIdAndStatus(userId,Status.UNDER_REVIEW);
         List<disasterDto> dtos = new ArrayList<>();
         for(disasterEntity entity : disasters){
             disasterDto dto = new disasterDto();
@@ -186,5 +190,16 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         return ResponseEntity.ok(dtos);
     }
 
+    
+    @Override
+    @Transactional
+    public ResponseEntity<?> disasterApprove(ObjectId disasterId){
+        disasterEntity disaster = DisasterRepo.findByDisasterId(disasterId);
+        Double conf = disaster.getFinalConfidence();
+        Set<Forces> forces = disaster.getForces();
+        
 
+        return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been verified",disaster.getStatus()));
+    }
+    
 }

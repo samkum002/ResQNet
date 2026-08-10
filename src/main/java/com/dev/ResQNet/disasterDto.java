@@ -26,6 +26,6 @@ public class disasterDto {
     private Set<Disaster> disasterType = new HashSet<>();
     private Set<Forces> forces = new HashSet<>();
     private ObjectId image;
-     private ObjectId disasterId;
+    private ObjectId disasterId;
     
 }
