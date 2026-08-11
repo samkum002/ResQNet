@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.parameters.RequestBody;
+
 
 @RestController
 @RequestMapping("/admin")
@@ -38,14 +40,40 @@ public class adminDashboardController {
     }
 
     @PostMapping("/{disaterId}/approve")
-    public ResponseEntity<?> approveDisaster(ObjectId disasterId){
+    public ResponseEntity<?> approveDisaster(ObjectId disasterId,@RequestBody(required=false) disasterDto dto){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String name = auth.getName();
+        userEntity user = userrepo.findByUsername(name);
+        disasterEntity disaster = disasterrepo.findByDisasterId(disasterId);
+        if(user==null||disaster==null){
+            return ResponseEntity.notFound().build();
+        }
+        if(dto!=null){
+            if(dto.getSeverity()!=null){
+                disaster.setSeverity(dto.getSeverity());
+            }
+            if(dto.getForces()!=null){
+                disaster.setForces(dto.getForces());
+            }
+            if(dto.getDisasterType()!=null){
+                disaster.setDisasterType(dto.getDisasterType());
+            }
+            if(dto.getSuspicious()!=null){
+                disaster.setSuspicious(dto.getSuspicious());
+            }
+            disasterrepo.save(disaster);
+        }
+        return adminDashboardservice.disasterApprove(disasterId);
+    }
+    
+    @PostMapping("/{disaterId}/reject")
+    public ResponseEntity<?> rejectDisaster(ObjectId disasterId){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
         userEntity user = userrepo.findByUsername(name);
         if(user==null){
             return ResponseEntity.notFound().build();
         }
-        return adminDashboardservice.disasterApprove(disasterId);
+        return adminDashboardservice.disasterReject(disasterId);
     }
-    
 }

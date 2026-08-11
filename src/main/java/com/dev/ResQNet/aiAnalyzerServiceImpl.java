@@ -156,7 +156,9 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
             disasterentity.setAiStatus(AI.FAILED);
             disasterrepo.save(disasterentity);
             e.printStackTrace();
-            return;
+            if(disasterentity.getRetryCount()<5){
+                return;
+            }
         }
         dashboardService.calculateFinalVal(disasterId);
         dashboardService.checkInfo(disasterId);

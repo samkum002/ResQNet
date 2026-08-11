@@ -1,7 +1,8 @@
 package com.dev.ResQNet;
 
-import org.bson.types.ObjectId;
 import java.util.List;
+
+import org.bson.types.ObjectId;
 import org.springframework.http.ResponseEntity;
 
 
@@ -14,4 +15,5 @@ public interface  adminDashboardService {
     boolean checkDuplicateDisasters(double latitude,double longitude,String state,ObjectId disasterId);
     ResponseEntity<List<disasterDto>> disasterList(ObjectId userId);
     ResponseEntity<?> disasterApprove(ObjectId disasterId);
+    ResponseEntity<?> disasterReject(ObjectId disasterId);
 }

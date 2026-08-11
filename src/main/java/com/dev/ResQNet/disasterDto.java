@@ -27,5 +27,6 @@ public class disasterDto {
     private Set<Forces> forces = new HashSet<>();
     private ObjectId image;
     private ObjectId disasterId;
+    public Boolean Suspicious;
     
 }

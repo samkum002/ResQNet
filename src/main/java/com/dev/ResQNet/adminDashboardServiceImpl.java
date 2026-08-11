@@ -25,6 +25,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
     adminDashboardRepo dashboardRepo;
 
     @Autowired
+    stationRepo stationrepo;
+
+    @Autowired
     SimpMessagingTemplate template;
 
     @Autowired
@@ -70,6 +73,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         }
         userrepo.save(sortedAdmin);
         disasterDto dto = new disasterDto();
+        dto.setSuspicious(entity.getSuspicious());
         dto.setAiConfidence(entity.getAiConfidence());
         dto.setAiStatus(entity.getAiStatus());
         dto.setUserReport(entity.getUserReport());
@@ -99,9 +103,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         List<disasterEntity> Alldisasters = DisasterRepo.findByAssignmentStatus(Assignment.TIMEOUT);
         for(disasterEntity entity : Alldisasters){
             disasterDto dto = new disasterDto();
+            dto.setSuspicious(entity.getSuspicious());
             dto.setAiConfidence(entity.getAiConfidence());
             dto.setAiStatus(entity.getAiStatus());
-            dto.setAssignmentStatus(entity.getAssignmentStatus());
             dto.setDisasterType(entity.getDisasterType());
             dto.setUserReport(entity.getUserReport());
             dto.setForces(entity.getForces());
@@ -116,11 +120,12 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             List<userEntity> filteredAdmins = admins.stream().filter(admin->admin.getAdminStatus()!=Admin.OFFLINE).toList();
             for(userEntity admin : filteredAdmins){
                 if(!admin.getUserId().equals(adminId)){
+                    entity.setAssignmentStatus(Assignment.REASSIGNED);
+                    DisasterRepo.save(entity);
+                    dto.setAssignmentStatus(entity.getAssignmentStatus());
                     template.convertAndSend("/topic/Disaster/"+admin.getUserId(), dto);
                 }
             }
-            entity.setAssignmentStatus(Assignment.REASSIGNED);
-            DisasterRepo.save(entity);
         }
     }
 
@@ -130,6 +135,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         userEntity user = userrepo.findByUserId(disaster.getUserId());
         Double trust = 0.2*user.getTrustScore();
         Double finalVal = ((0.5)*disaster.getAiConfidence()+trust+disaster.getReportCount()*0.3);
+        if(finalVal<55){
+            disaster.setSuspicious(true);
+        }
         disaster.setFinalConfidence(finalVal);
         DisasterRepo.save(disaster);
     }
@@ -138,7 +146,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
     public boolean checkDuplicateDisasters(double latitude,double longitude,String state,ObjectId disasterId){
         Query query = new Query();
         query.addCriteria(Criteria.where("state").is(state));
-        query.addCriteria(Criteria.where("status").in(Status.UNDER_REVIEW,Status.AI_PROGRESS,Status.BACKUP_DISPATCHED));
+        query.addCriteria(Criteria.where("status").in(Status.UNDER_REVIEW,Status.AI_PROGRESS,Status.BACKUP_DISPATCHED,Status.DISPATCHED,Status.REPORTED,Status.VERIFIED));
         query.addCriteria(Criteria.where("location").nearSphere(new GeoJsonPoint(longitude, latitude)).maxDistance(500.0/6378137.0));
         List<disasterEntity> disasters = mongoTemplate.find(query,disasterEntity.class);
         if(disasters.isEmpty()){
@@ -195,11 +203,64 @@ public class adminDashboardServiceImpl implements adminDashboardService{
     @Transactional
     public ResponseEntity<?> disasterApprove(ObjectId disasterId){
         disasterEntity disaster = DisasterRepo.findByDisasterId(disasterId);
+        userEntity user = userrepo.findByUserId(disaster.getUserId());
         Double conf = disaster.getFinalConfidence();
+        Double multiplier = 0.0;
         Set<Forces> forces = disaster.getForces();
-        
-
+        Severity severity = disaster.getSeverity();
+        Integer trucks = 0;
+        Integer personnel = 0;
+        switch(severity){
+            case LOW -> {
+                trucks  = 1;
+                personnel = 4;
+            }case MEDIUM -> {
+                trucks = 2;
+                personnel = 8;
+            }case HIGH -> {
+                trucks = 4;
+                personnel = 15;
+            }case CRITICAL -> {
+                trucks = 6;
+                personnel = 25;
+            }
+        }
+        if(conf<40){
+            multiplier=0.5;
+        }else if(conf<60){
+            multiplier=0.7;
+        }else if(conf<75){
+            multiplier=0.85;
+        }else if(conf<90){
+            multiplier=1.0;
+        }else{
+            multiplier = 1.2;
+        }
+        Integer newTrucks = (int) Math.ceil((trucks*multiplier));
+        Integer newPersonnel = (int) Math.ceil((personnel*multiplier));
+        disaster.setStatus(Status.VERIFIED);
+        DisasterRepo.save(disaster);
+        template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId(),"Disaster is verified.",disaster.getStatus()));
         return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been verified",disaster.getStatus()));
     }
     
+    @Override
+    @Transactional
+    public ResponseEntity<?> disasterReject(ObjectId disasterId){
+        disasterEntity disaster = DisasterRepo.findByDisasterId(disasterId);
+        if(disaster==null){
+            return ResponseEntity.notFound().build();
+        }
+        disaster.setStatus(Status.REJECTED);
+        DisasterRepo.save(disaster);
+        userEntity user = userrepo.findByUserId(disaster.getUserId());
+        user.setTrustScore(Math.max(0,user.getTrustScore()-20));
+        userrepo.save(user);
+        userEntity admin = userrepo.findByUserId(disaster.getAssignedAdminId());
+        admin.setActiveIncidents(user.getActiveIncidents()-1);
+        userrepo.save(admin);
+        template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId(),
+        "Disaster is rejected. Kindly don't spam the management system",disaster.getStatus()));
+        return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been rejected",disaster.getStatus()));   
+    }
 }
