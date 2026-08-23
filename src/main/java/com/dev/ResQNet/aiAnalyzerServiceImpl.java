@@ -11,6 +11,7 @@ import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.gridfs.GridFsResource;
 import org.springframework.data.mongodb.gridfs.GridFsTemplate;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MimeTypeUtils;
@@ -23,6 +24,9 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
     
     @Autowired
     private GridFsTemplate gridFsTemplate;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     @Autowired
     private adminDashboardService dashboardService;
@@ -59,6 +63,11 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
     @Override
     public void aiAnalyzer(byte[] image_bytes,ObjectId disasterId,String content){
 
+        disasterEntity disasterentity = disasterrepo.findByDisasterId(disasterId);
+        disasterentity.setStatus(Status.AI_PROGRESS);
+        disasterrepo.save(disasterentity);
+        userEntity user = userrepo.findById(disasterentity.getUserId()).orElse(null);
+        messagingTemplate.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disasterentity.getDisasterId(),"Disaster is under AI review.",disasterentity.getStatus()));
         Media m = new Media(MimeTypeUtils.parseMimeType(content),new ByteArrayResource(image_bytes));
         // System.out.println("Analyzing image for disasterId: " + disasterId);
 
@@ -140,18 +149,17 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
                 String cleanJson = rawResponse.substring(jsonStart, jsonEnd + 1);
                 ObjectMapper objectMapper = new ObjectMapper();
                 aiAnalyzedEntity aiEntity = objectMapper.readValue(cleanJson, aiAnalyzedEntity.class);
-                disasterEntity disasterentity = disasterrepo.findByDisasterId(disasterId);
-                disasterentity.setStatus(Status.AI_PROGRESS);
                 disasterentity.setAiStatus(AI.COMPLETED);
                 disasterentity.setAiConfidence(aiEntity.getAiConfidence());
                 disasterentity.setSeverity(aiEntity.getSeverity());
                 disasterentity.setForces(aiEntity.getForces());
                 disasterentity.setDisasterType(aiEntity.getDisasterType());
                 disasterrepo.save(disasterentity);
+                messagingTemplate.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disasterentity.getDisasterId(),"AI analysis complete.",disasterentity.getStatus()));
+
             }
         }
         catch(Exception e){
-            disasterEntity disasterentity = disasterrepo.findByDisasterId(disasterId);
             disasterentity.setRetryCount(disasterentity.getRetryCount()+1);
             disasterentity.setAiStatus(AI.FAILED);
             disasterrepo.save(disasterentity);

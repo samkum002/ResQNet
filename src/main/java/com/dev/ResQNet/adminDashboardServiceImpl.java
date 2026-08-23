@@ -154,7 +154,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         }
         disasterEntity dnew = DisasterRepo.findByDisasterId(disasterId);
         for(disasterEntity entity : disasters){
-            if(entity.getUserReport().equalsIgnoreCase(dnew.getUserReport())){
+            if(entity.getUserReport().equalsIgnoreCase(dnew.getUserReport())&&!entity.getDisasterId().equals(dnew.getDisasterId())){
                 entity.setReportCount(entity.getReportCount()+1);
                 DisasterRepo.save(entity);
                 calculateFinalVal(entity.getDisasterId());
@@ -168,6 +168,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
                 dto.setReportCount(entity.getReportCount());
                 dto.setFinalConfidence(entity.getFinalConfidence());
                 template.convertAndSend("/topic/disaster/"+dnew.getAssignedAdminId(),dto);
+                template.convertAndSend("/queue/report"+dnew.getUserId(), new reportResponse(dnew.getDisasterId(),"Disaster is already reported.",entity.getStatus()));
                 return true;
 
             }
@@ -241,7 +242,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         disaster.setStatus(Status.VERIFIED);
         DisasterRepo.save(disaster);
         template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId(),"Disaster is verified.",disaster.getStatus()));
-        return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been verified",disaster.getStatus()));
+        return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been verified. Help is on the way.",disaster.getStatus()));
     }
     
     @Override
@@ -263,4 +264,5 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         "Disaster is rejected. Kindly don't spam the management system",disaster.getStatus()));
         return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been rejected",disaster.getStatus()));   
     }
+
 }
