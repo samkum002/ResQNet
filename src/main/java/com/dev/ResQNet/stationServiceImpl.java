@@ -1,11 +1,13 @@
 package com.dev.ResQNet;
 
-import java.util.Set;
 
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import java.util.*;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 
 @Service
@@ -15,7 +17,16 @@ public class stationServiceImpl implements stationService {
     private stationRepo stationRepository;
 
     @Autowired
+    private dispatchRepo dispatchRepository;
+
+    @Autowired
+    private userRepo userRepository;
+
+    @Autowired
     private disasterRepo disasterRepository;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
 
     @Override
     @Async
@@ -53,11 +64,46 @@ public class stationServiceImpl implements stationService {
                 requiredPersonnel = Math.min(requiredPersonnel, newPersonnel);
             }
             if (station != null) {
-                // send notification to station with requiredTrucks and requiredPersonnel through WebSocket
+                dispatchEntity dispatch = new dispatchEntity();
+                dispatch.setDisasterId(disasterId);
+                dispatch.setStationId(station.getStationId());
+                dispatch.setAssignedVehicle(requiredTrucks);
+                dispatch.setAssignedPersonnel(requiredPersonnel);
+                dispatch.setForceType(force);
+                dispatch.setSeverity(disaster.getSeverity());
+                dispatch.setStatus(Status.VERIFIED);
+                dispatchRepository.save(dispatch);
+                dispatchDto dto = new dispatchDto();
+                dto.setDispatchId(dispatch.getDispatchId());
+                dto.setSeverity(dispatch.getSeverity());
+                dto.setForceType(dispatch.getForceType());
+                dto.setAssignedVehicle(dispatch.getAssignedVehicle());
+                dto.setAssignedPersonnel(dispatch.getAssignedPersonnel());
+                dto.setStatus(dispatch.getStatus());
+                messagingTemplate.convertAndSend("/update/mission" + station.getUserId(), dto);
                 newTrucks -= requiredTrucks;
                 newPersonnel -= requiredPersonnel;
             }
             index++;
         }
+    }
+
+    @Override
+    public ResponseEntity<List<dispatchDto>> getMissionsForStation(String username) {
+        userEntity user = userRepository.findByUsername(username);
+        List<dispatchEntity> dispatches = dispatchRepository.findByStationIdAndStatus(user.getStationId(), Status.VERIFIED);
+        List<dispatchDto> dispatchDtos = new ArrayList<>();
+        for(dispatchEntity dispatch : dispatches){
+            dispatchDto dto = new dispatchDto();
+            dto.setDispatchId(dispatch.getDispatchId());
+            dto.setSeverity(dispatch.getSeverity());
+            dto.setForceType(dispatch.getForceType());
+            dto.setAssignedVehicle(dispatch.getAssignedVehicle());
+            dto.setAssignedPersonnel(dispatch.getAssignedPersonnel());
+            dto.setStatus(dispatch.getStatus());
+            dispatchDtos.add(dto);
+        }
+        return ResponseEntity.ok(dispatchDtos);
+
     }
 }

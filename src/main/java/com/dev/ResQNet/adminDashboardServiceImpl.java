@@ -76,6 +76,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         }
         userrepo.save(sortedAdmin);
         disasterDto dto = new disasterDto();
+        dto.setDisasterId(entity.getDisasterId());
         dto.setSuspicious(entity.getSuspicious());
         dto.setAiConfidence(entity.getAiConfidence());
         dto.setAiStatus(entity.getAiStatus());
@@ -106,6 +107,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         List<disasterEntity> Alldisasters = DisasterRepo.findByAssignmentStatus(Assignment.TIMEOUT);
         for(disasterEntity entity : Alldisasters){
             disasterDto dto = new disasterDto();
+            dto.setDisasterId(entity.getDisasterId());
             dto.setSuspicious(entity.getSuspicious());
             dto.setAiConfidence(entity.getAiConfidence());
             dto.setAiStatus(entity.getAiStatus());

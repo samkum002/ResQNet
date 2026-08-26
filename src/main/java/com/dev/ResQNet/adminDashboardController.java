@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -39,8 +40,8 @@ public class adminDashboardController {
         return adminDashboardservice.disasterList(user.getUserId());
     }
 
-    @PostMapping("/{disaterId}/approve")
-    public ResponseEntity<?> approveDisaster(ObjectId disasterId,@RequestBody(required=false) disasterDto dto){
+    @PostMapping("/{disasterId}/approve")
+    public ResponseEntity<?> approveDisaster(@PathVariable ObjectId disasterId,@RequestBody(required=false) disasterDto dto){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
         userEntity user = userrepo.findByUsername(name);
@@ -66,8 +67,8 @@ public class adminDashboardController {
         return adminDashboardservice.disasterApprove(disasterId);
     }
     
-    @PostMapping("/{disaterId}/reject")
-    public ResponseEntity<?> rejectDisaster(ObjectId disasterId){
+    @PostMapping("/{disasterId}/reject")
+    public ResponseEntity<?> rejectDisaster(@PathVariable ObjectId disasterId){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
         userEntity user = userrepo.findByUsername(name);

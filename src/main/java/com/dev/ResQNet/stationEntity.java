@@ -20,6 +20,7 @@ public class stationEntity {
     
     @Id
     private ObjectId stationId;
+    private ObjectId userId;
     private Forces forceType;
     private String stationName;
     private Station status;

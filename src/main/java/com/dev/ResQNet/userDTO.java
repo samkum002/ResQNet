@@ -28,6 +28,6 @@ public class userDTO {
     @NotBlank(message = "username cannot be blank")
     @Indexed(unique=true)
     private String username;
-    // private ObjectId stationId;
+    private ObjectId stationId;
     
 }

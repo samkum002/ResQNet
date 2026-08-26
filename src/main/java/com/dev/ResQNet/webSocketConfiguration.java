@@ -25,13 +25,15 @@ public class webSocketConfiguration implements WebSocketMessageBrokerConfigurer{
     public void configureMessageBroker(MessageBrokerRegistry config) {
 		config.enableSimpleBroker("/topic");
         config.enableSimpleBroker("/queue");
+        config.enableSimpleBroker("/update");
     }
 
 	@Bean
 	public AuthorizationManager<Message<?>> messageAuthorizationManager(MessageMatcherDelegatingAuthorizationManager.Builder messages) {
 		messages
 			.simpSubscribeDestMatchers("/topic/**").hasRole("ADMIN")
-            .simpSubscribeDestMatchers("/queue/**").hasRole("USER");
+            .simpSubscribeDestMatchers("/queue/**").hasRole("USER")
+            .simpSubscribeDestMatchers("/update/**").hasRole("STATION_MANAGER");
 		return messages.build();
 	}
 

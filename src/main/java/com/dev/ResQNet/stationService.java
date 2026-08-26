@@ -1,8 +1,11 @@
 package com.dev.ResQNet;
 
-import org.bson.types.ObjectId;
+import java.util.List;
 
+import org.bson.types.ObjectId;
+import org.springframework.http.ResponseEntity;
 public interface stationService {
     
     void findStation(ObjectId disasterId, Integer newTrucks, Integer newPersonnel);
+    public ResponseEntity<List<dispatchDto>> getMissionsForStation(String username);
 }
