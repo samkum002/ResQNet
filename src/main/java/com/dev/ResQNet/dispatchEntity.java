@@ -21,6 +21,9 @@ public class dispatchEntity {
     @Id
     private ObjectId dispatchId;
     private ObjectId stationId;
+    private ObjectId disasterId;
+    private Severity severity;
+    private Forces forceType;
     private Integer assignedVehicle;
     private Integer assignedPersonnel;
     private Status status;

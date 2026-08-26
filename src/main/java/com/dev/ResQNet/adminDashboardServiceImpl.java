@@ -38,6 +38,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
 
     @Autowired
     private MongoTemplate mongoTemplate;
+
+    @Autowired
+    private stationService stationservice;
     
     @Override
     public void checkInfo(ObjectId disasterId){
@@ -241,6 +244,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         Integer newPersonnel = (int) Math.ceil((personnel*multiplier));
         disaster.setStatus(Status.VERIFIED);
         DisasterRepo.save(disaster);
+        stationservice.findStation(disasterId, newTrucks, newPersonnel);
         template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId(),"Disaster is verified.",disaster.getStatus()));
         return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been verified. Help is on the way.",disaster.getStatus()));
     }

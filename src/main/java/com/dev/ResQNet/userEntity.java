@@ -23,6 +23,7 @@ public class userEntity {
     
     @Id
     private ObjectId userId;
+    // private ObjectId stationId;
     private String email;
     private String password;
     private List<String> roles = new ArrayList<>();
