@@ -8,4 +8,6 @@ public interface stationService {
     
     void findStation(ObjectId disasterId, Integer newTrucks, Integer newPersonnel);
     public ResponseEntity<List<dispatchDto>> getMissionsForStation(String username);
+
+    public ResponseEntity<?> approveMisssion(ObjectId dispatchId, String username);
 }

@@ -10,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PathVariable;
 
 @RestController
 @RequestMapping("/station")
@@ -23,6 +24,13 @@ public class stationController {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
         return stationservice.getMissionsForStation(username);
+    }
+
+    @GetMapping("/{dispatchId}/approve")
+    public ResponseEntity<?> approveDispatch(@PathVariable ObjectId dispatchId){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        return stationservice.approveMisssion(dispatchId,username);
     }
 
 }

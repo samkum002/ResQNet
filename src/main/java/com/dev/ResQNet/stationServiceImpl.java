@@ -1,11 +1,16 @@
 package com.dev.ResQNet;
 
 
+import java.time.LocalDateTime;
+
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.util.*;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
@@ -15,6 +20,9 @@ public class stationServiceImpl implements stationService {
     
     @Autowired
     private stationRepo stationRepository;
+
+    @Autowired
+    private resourceRepository resourceRepo;
 
     @Autowired
     private dispatchRepo dispatchRepository;
@@ -105,5 +113,51 @@ public class stationServiceImpl implements stationService {
         }
         return ResponseEntity.ok(dispatchDtos);
 
+    }
+
+    @Override
+    @Transactional
+    public ResponseEntity<?> approveMisssion(ObjectId dispatchId,String username) {
+
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() ->new RuntimeException("Dispatch not found"));
+
+        if (!dispatch.getStationId().equals(userRepository.findByUsername(username).getStationId())) {
+            return ResponseEntity.status(403).body("You are not authorized to approve this mission.");
+        }
+
+        if (dispatch.getStatus() == Status.DISPATCHED) {
+            return ResponseEntity.badRequest().body("This mission has already been processed.");
+        }
+
+        resourceEntity resource = resourceRepo.findById(dispatch.getStationId()).orElseThrow(() ->new RuntimeException("Station resource not found"));
+        disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+
+        if (disaster == null) {
+            return ResponseEntity.badRequest().body("Disaster not found.");
+        }
+
+        if (resource.getAvailablePersonnel() < dispatch.getAssignedPersonnel()) {
+            return ResponseEntity.badRequest().body("Not enough available personnel.");
+        }
+
+        if (resource.getAvailableVehicle() < dispatch.getAssignedVehicle()) {
+            return ResponseEntity.badRequest().body("Not enough available vehicles.");
+        }
+
+        resource.setAvailablePersonnel(resource.getAvailablePersonnel()- dispatch.getAssignedPersonnel());
+        resource.setAvailableVehicle(resource.getAvailableVehicle()- dispatch.getAssignedVehicle());
+        resourceRepo.save(resource);
+
+        dispatch.setStatus(Status.DISPATCHED);
+        dispatch.setDispatchedAt(LocalDateTime.now());
+        dispatchRepository.save(dispatch);
+
+        disaster.setStatus(Status.DISPATCHED);
+        disaster.setDispatchedAt(dispatch.getDispatchedAt());
+        disasterRepository.save(disaster);
+
+        messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
+        messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
+        return ResponseEntity.ok("Dispatch approved successfully.");
     }
 }
