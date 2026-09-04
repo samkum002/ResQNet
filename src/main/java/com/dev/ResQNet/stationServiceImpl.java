@@ -2,17 +2,17 @@ package com.dev.ResQNet;
 
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
+import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.*;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
 
 
 @Service
@@ -35,6 +35,18 @@ public class stationServiceImpl implements stationService {
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
+
+    private double calculateDistance(GeoJsonPoint p1, GeoJsonPoint p2) {
+        double lat1 = p1.getY();
+        double lon1 = p1.getX();
+        double lat2 = p2.getY();
+        double lon2 = p2.getX();
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)+ Math.cos(Math.toRadians(lat1))* Math.cos(Math.toRadians(lat2))* Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return 6371 * c;
+    }
 
     @Override
     @Async
@@ -60,7 +72,16 @@ public class stationServiceImpl implements stationService {
         int index = 0;
         for(Forces force : disaster.getForces()){
             Integer requiredTrucks,requiredPersonnel;
-            stationEntity station = stationRepository.findNearestStationByLocationAndStatusAndForceType(disaster.getLocation(),Station.ACTIVE,force);
+            List<stationEntity> stations = stationRepository.findByStatusAndForceTypeAndStationIdNotInAndLocationNear(Station.ACTIVE,force,disaster.getRejectedStations(),disaster.getLocation());
+            stations.sort((a, b) -> {
+                double distanceA = calculateDistance(disaster.getLocation(),a.getLocation());
+                double distanceB = calculateDistance(disaster.getLocation(),b.getLocation());
+                return Double.compare(distanceA, distanceB);
+            });
+            if (stations.isEmpty()) {
+                continue;
+            }
+            stationEntity station = stations.get(0);
             if (index == disaster.getForces().size() - 1) {
                 requiredTrucks = newTrucks;
                 requiredPersonnel = newPersonnel;
@@ -159,5 +180,47 @@ public class stationServiceImpl implements stationService {
         messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
         messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
         return ResponseEntity.ok("Dispatch approved successfully.");
+    }
+
+    @Override
+    @Async
+    public void newMission(ObjectId dispatchId, String username, Forces force){
+        
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
+        disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+        
+        List<stationEntity> stations = stationRepository.findByStatusAndForceTypeAndStationIdNotInAndLocationNear(Station.ACTIVE,force,disaster.getRejectedStations(),disaster.getLocation());
+        stations.sort((a, b) -> {
+            double distanceA = calculateDistance(disaster.getLocation(),a.getLocation());
+            double distanceB = calculateDistance(disaster.getLocation(),b.getLocation());
+            return Double.compare(distanceA, distanceB);
+        });
+
+        if (stations.isEmpty()) {
+            disaster.setStatus(Status.DISPATCH_FAILED);
+            disasterRepository.save(disaster);
+            messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(),new reportResponse(disaster.getDisasterId(),"No available stations for the required force type -> " + force,disaster.getStatus()));
+            return;
+        }
+
+        stationEntity station = stations.get(0);
+        dispatchEntity newDispatch = new dispatchEntity();
+        newDispatch.setDisasterId(disaster.getDisasterId());
+        newDispatch.setStationId(station.getStationId());
+        newDispatch.setAssignedVehicle(dispatch.getAssignedVehicle());
+        newDispatch.setAssignedPersonnel(dispatch.getAssignedPersonnel());
+        newDispatch.setForceType(force);
+        newDispatch.setSeverity(disaster.getSeverity());
+        newDispatch.setStatus(Status.VERIFIED);
+        dispatchRepository.save(newDispatch);
+
+        dispatchDto dto = new dispatchDto();
+        dto.setDispatchId(newDispatch.getDispatchId());
+        dto.setSeverity(newDispatch.getSeverity());
+        dto.setForceType(newDispatch.getForceType());
+        dto.setAssignedVehicle(newDispatch.getAssignedVehicle());
+        dto.setAssignedPersonnel(newDispatch.getAssignedPersonnel());
+        dto.setStatus(newDispatch.getStatus());
+        messagingTemplate.convertAndSend("/update/mission" + station.getUserId(), dto);        
     }
 }

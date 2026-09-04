@@ -19,6 +19,18 @@ public class stationController {
     @Autowired
     private stationService stationservice;
 
+    @Autowired
+    private stationRepo stationRepository;
+
+    @Autowired
+    private userRepo userRepository;
+
+    @Autowired
+    private dispatchRepo dispatchRepository;
+
+    @Autowired
+    private disasterRepo disasterRepository;
+
     @GetMapping("/missions")
     public ResponseEntity<List<dispatchDto>> getMissions(){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -31,6 +43,27 @@ public class stationController {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
         return stationservice.approveMisssion(dispatchId,username);
+    }
+
+    @GetMapping("/{dispatchId}/reject")
+    public ResponseEntity<?> rejectDispatch(@PathVariable ObjectId dispatchId){
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
+
+        if (!dispatch.getStationId().equals(userRepository.findByUsername(username).getStationId())) {
+            return ResponseEntity.status(403).body("You are not authorized to reject this dispatch.");
+        }
+        stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() -> new RuntimeException("Station not found"));
+        disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+        disaster.getRejectedStations().add(station.getStationId());
+        disasterRepository.save(disaster);
+        Forces force = station.getForceType();
+        stationservice.newMission(dispatchId,username,force);
+
+        return ResponseEntity.ok("Dispatch rejected successfully.");
     }
 
 }

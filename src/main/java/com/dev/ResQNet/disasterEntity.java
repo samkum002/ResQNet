@@ -51,6 +51,7 @@ public class disasterEntity {
     private ObjectId stationId;
     private Set<Disaster> disasterType = new HashSet<>();
     private Set<Forces> forces = new HashSet<>();
+    private Set<ObjectId> rejectedStations = new HashSet<>();
     private ObjectId image;
     private String userReport;
 }
