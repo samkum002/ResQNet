@@ -21,6 +21,7 @@ public class stationEntity {
     @Id
     private ObjectId stationId;
     private ObjectId userId;
+    private ObjectId workerId;
     private Forces forceType;
     private String stationName;
     private Station status;

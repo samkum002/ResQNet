@@ -1,6 +1,5 @@
 package com.dev.ResQNet;
 
-import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.core.index.Indexed;
 
 import jakarta.validation.constraints.Email;
@@ -23,11 +22,11 @@ public class userDTO {
     @Email(message="Enter valid Email")
     private String email;
     @NotBlank(message = "Enter a password")
-    @Size(min=6,max=30,message="Password must be between 8 and 30")
+    @Size(min=6,max=30,message="Password must be between 6 and 30")
     private String password;
     @NotBlank(message = "username cannot be blank")
     @Indexed(unique=true)
     private String username;
-    private ObjectId stationId;
+    // private ObjectId stationId;
     
 }

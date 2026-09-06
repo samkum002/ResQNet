@@ -26,6 +26,7 @@ public class webSocketConfiguration implements WebSocketMessageBrokerConfigurer{
 		config.enableSimpleBroker("/topic");
         config.enableSimpleBroker("/queue");
         config.enableSimpleBroker("/update");
+        config.enableSimpleBroker("/new");
     }
 
 	@Bean
@@ -33,7 +34,8 @@ public class webSocketConfiguration implements WebSocketMessageBrokerConfigurer{
 		messages
 			.simpSubscribeDestMatchers("/topic/**").hasRole("ADMIN")
             .simpSubscribeDestMatchers("/queue/**").hasRole("USER")
-            .simpSubscribeDestMatchers("/update/**").hasRole("STATION_MANAGER");
+            .simpSubscribeDestMatchers("/update/**").hasRole("STATION_MANAGER")
+            .simpSubscribeDestMatchers("/new/**").hasRole("WORKER");
 		return messages.build();
 	}
 

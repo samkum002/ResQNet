@@ -61,6 +61,9 @@ public class adminDashboardController {
             if(dto.getSuspicious()!=null){
                 disaster.setSuspicious(dto.getSuspicious());
             }
+            if(dto.getUserReport()!=null){
+                disaster.setUserReport(dto.getUserReport());
+            }
             disasterrepo.save(disaster);
         }
         return adminDashboardservice.disasterApprove(disasterId);

@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 
 @RestController
 @RequestMapping("/station")
@@ -64,6 +65,20 @@ public class stationController {
         stationservice.newMission(dispatchId,username,force);
 
         return ResponseEntity.ok("Dispatch rejected successfully.");
+    }
+
+    @PostMapping("/{dispatchId}/complete")
+    public ResponseEntity<?> completeDispatch(@PathVariable ObjectId dispatchId){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        return stationservice.completeMission(dispatchId,username);
+    }
+
+    @PostMapping("/{dispatchId}/fake")
+    public ResponseEntity<?> fakeDispatch(@PathVariable ObjectId dispatchId){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        return stationservice.fakeMission(dispatchId,username);
     }
 
 }

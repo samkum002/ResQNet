@@ -132,6 +132,9 @@ public class stationServiceImpl implements stationService {
             dto.setStatus(dispatch.getStatus());
             dispatchDtos.add(dto);
         }
+        if(dispatchDtos.isEmpty()){
+            return ResponseEntity.noContent().build();
+        }
         return ResponseEntity.ok(dispatchDtos);
 
     }
@@ -152,6 +155,8 @@ public class stationServiceImpl implements stationService {
 
         resourceEntity resource = resourceRepo.findById(dispatch.getStationId()).orElseThrow(() ->new RuntimeException("Station resource not found"));
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+
+        stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() ->new RuntimeException("Station not found"));
 
         if (disaster == null) {
             return ResponseEntity.badRequest().body("Disaster not found.");
@@ -177,6 +182,7 @@ public class stationServiceImpl implements stationService {
         disaster.setDispatchedAt(dispatch.getDispatchedAt());
         disasterRepository.save(disaster);
 
+        messagingTemplate.convertAndSend("/new/mission" + station.getWorkerId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
         messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
         messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
         return ResponseEntity.ok("Dispatch approved successfully.");
@@ -222,5 +228,87 @@ public class stationServiceImpl implements stationService {
         dto.setAssignedPersonnel(newDispatch.getAssignedPersonnel());
         dto.setStatus(newDispatch.getStatus());
         messagingTemplate.convertAndSend("/update/mission" + station.getUserId(), dto);        
+    }
+
+    @Override 
+    @Transactional
+    public ResponseEntity<?> completeMission(ObjectId dispatchId, String username) {
+
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
+        userEntity worker = userRepository.findByUsername(username);
+
+        if (!dispatch.getStationId().equals(worker.getStationId())){
+            return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
+        }
+        if (dispatch.getStatus() != Status.DISPATCHED) {
+            return ResponseEntity.badRequest().body("This mission is not in a state that can be completed.");
+        }
+        resourceEntity resource = resourceRepo.findById(dispatch.getStationId()).orElseThrow(() -> new RuntimeException("Station resource not found"));
+        resource.setAvailablePersonnel(resource.getAvailablePersonnel() + dispatch.getAssignedPersonnel());
+        resource.setAvailableVehicle(resource.getAvailableVehicle() + dispatch.getAssignedVehicle());
+        resourceRepo.save(resource);
+
+        dispatch.setStatus(Status.COMPLETED);
+        dispatch.setCompletedAt(LocalDateTime.now());
+        dispatchRepository.save(dispatch);
+
+        disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+        disaster.setStatus(Status.COMPLETED);
+        disaster.setCompletedAt(dispatch.getCompletedAt());
+        disasterRepository.save(disaster);
+
+        userEntity admin = userRepository.findById(disaster.getAssignedAdminId()).orElseThrow(() -> new RuntimeException("User not found"));
+        admin.setActiveIncidents(admin.getActiveIncidents()-1);
+        userRepository.save(admin);
+
+        userEntity user = userRepository.findById(disaster.getUserId()).orElseThrow(() -> new RuntimeException("User not found"));
+        user.setTrustScore(Math.max(0, user.getTrustScore() + 10));
+        userRepository.save(user);
+        
+        messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Mission completed.", disaster.getStatus()));
+        messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId(), "Mission completed.", disaster.getStatus()));
+        return ResponseEntity.ok("Dispatch completed successfully.");
+    }
+
+    @Override
+    @Transactional 
+    public ResponseEntity<?> fakeMission(ObjectId dispatchId, String username) {
+        
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
+        userEntity worker = userRepository.findByUsername(username);
+
+        if (!dispatch.getStationId().equals(worker.getStationId())){
+            return ResponseEntity.status(403).body("You are not authorized to mark this mission as fake.");
+        }
+        if (dispatch.getStatus() != Status.DISPATCHED) {
+            return ResponseEntity.badRequest().body("This mission is not in a state that can be marked as fake.");
+        }
+
+        resourceEntity resource = resourceRepo.findById(dispatch.getStationId()).orElseThrow(() -> new RuntimeException("Station resource not found"));
+        resource.setAvailablePersonnel(resource.getAvailablePersonnel() + dispatch.getAssignedPersonnel());
+        resource.setAvailableVehicle(resource.getAvailableVehicle() + dispatch.getAssignedVehicle());
+        resourceRepo.save(resource);
+
+        dispatch.setStatus(Status.DISPATCH_FAILED);
+        dispatch.setCompletedAt(LocalDateTime.now());
+        dispatchRepository.save(dispatch);
+
+        disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+        disaster.setStatus(Status.DISPATCH_FAILED);
+        disaster.setCompletedAt(dispatch.getCompletedAt());
+        disasterRepository.save(disaster);
+
+        userEntity admin = userRepository.findById(disaster.getAssignedAdminId()).orElseThrow(() -> new RuntimeException("User not found"));
+        admin.setActiveIncidents(admin.getActiveIncidents()-1);
+        userRepository.save(admin);
+
+        userEntity user = userRepository.findById(disaster.getUserId()).orElseThrow(() -> new RuntimeException("User not found"));
+        user.setTrustScore(Math.max(0, user.getTrustScore() - 20));
+        userRepository.save(user);
+        
+        messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Mission marked as fake.", disaster.getStatus()));
+        messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId(), "Mission marked as fake. Please do not spam this platform.", disaster.getStatus()));
+        
+        return ResponseEntity.ok("Dispatch marked as fake successfully.");
     }
 }

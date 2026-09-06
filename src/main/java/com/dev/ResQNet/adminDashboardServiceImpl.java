@@ -201,6 +201,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             dto.setDisasterId(entity.getDisasterId());
             dtos.add(dto);
         }
+        if(dtos.isEmpty()){
+            return ResponseEntity.noContent().build();
+        }
         return ResponseEntity.ok(dtos);
     }
 

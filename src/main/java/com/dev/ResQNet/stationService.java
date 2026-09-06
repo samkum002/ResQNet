@@ -12,4 +12,6 @@ public interface stationService {
     public ResponseEntity<?> approveMisssion(ObjectId dispatchId, String username);
 
     public void newMission(ObjectId dispatchId, String username, Forces force);
+    ResponseEntity<?> completeMission(ObjectId dispatchId, String username);
+    ResponseEntity<?> fakeMission(ObjectId dispatchId, String username);
 }
