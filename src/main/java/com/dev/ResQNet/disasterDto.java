@@ -15,6 +15,7 @@ import lombok.Setter;
 public class disasterDto {
 
     private AI aiStatus;
+    private Status status;
     private Severity severity;
     private Integer aiConfidence;
     private Double finalConfidence;
@@ -27,6 +28,5 @@ public class disasterDto {
     private Set<Forces> forces = new HashSet<>();
     private ObjectId image;
     private ObjectId disasterId;
-    private Boolean Suspicious;
     
 }

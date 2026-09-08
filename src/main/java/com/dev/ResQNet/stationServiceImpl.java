@@ -3,6 +3,7 @@ package com.dev.ResQNet;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.bson.types.ObjectId;
@@ -205,7 +206,22 @@ public class stationServiceImpl implements stationService {
         if (stations.isEmpty()) {
             disaster.setStatus(Status.DISPATCH_FAILED);
             disasterRepository.save(disaster);
-            messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(),new reportResponse(disaster.getDisasterId(),"No available stations for the required force type -> " + force,disaster.getStatus()));
+            disasterDto dto = new disasterDto();
+            dto.setDisasterId(disaster.getDisasterId());
+            dto.setStatus(disaster.getStatus());
+            dto.setAiStatus(disaster.getAiStatus());
+            dto.setSeverity(disaster.getSeverity());
+            dto.setAiConfidence(disaster.getAiConfidence());
+            dto.setFinalConfidence(disaster.getFinalConfidence());
+            dto.setSuspicious(disaster.getSuspicious());
+            dto.setImage(disaster.getImage());
+            dto.setAssignmentStatus(disaster.getAssignmentStatus());
+            dto.setState(dto.getState());
+            dto.setUserReport(disaster.getUserReport());
+            dto.setReportCount(disaster.getReportCount());
+            dto.setDisasterType(disaster.getDisasterType());
+            dto.setForces(Collections.singleton(force)); // this is the only force that failed to find a station so we set it in the dto by creating a singleton set
+            messagingTemplate.convertAndSend("/queue/report" + disaster.getAssignedAdminId(),dto);
             return;
         }
 

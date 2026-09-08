@@ -80,6 +80,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         dto.setSuspicious(entity.getSuspicious());
         dto.setAiConfidence(entity.getAiConfidence());
         dto.setAiStatus(entity.getAiStatus());
+        dto.setStatus(entity.getStatus());
         dto.setUserReport(entity.getUserReport());
         dto.setAssignmentStatus(entity.getAssignmentStatus());
         dto.setDisasterType(entity.getDisasterType());
@@ -89,7 +90,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         dto.setState(entity.getState());
         dto.setSeverity(entity.getSeverity());
         dto.setSuspicious(entity.getSuspicious());
-        dto.setReportCount(entity.getReportCount());
+        dto.setReportCount(entity.getReportCount()); 
         template.convertAndSend("/topic/Disaster/"+adminId, dto);
 
     }
@@ -117,6 +118,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             dto.setFinalConfidence(entity.getFinalConfidence());
             dto.setImage(entity.getImage());
             dto.setState(entity.getState());
+            dto.setStatus(entity.getStatus());
             dto.setSeverity(entity.getSeverity());
             dto.setSuspicious(entity.getSuspicious());
             dto.setReportCount(entity.getReportCount());
@@ -151,7 +153,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
     public boolean checkDuplicateDisasters(double latitude,double longitude,String state,ObjectId disasterId){
         Query query = new Query();
         query.addCriteria(Criteria.where("state").is(state));
-        query.addCriteria(Criteria.where("status").in(Status.UNDER_REVIEW,Status.AI_PROGRESS,Status.BACKUP_DISPATCHED,Status.DISPATCHED,Status.REPORTED,Status.VERIFIED));
+        query.addCriteria(Criteria.where("status").in(Status.UNDER_REVIEW,Status.AI_PROGRESS,Status.BACKUP_DISPATCHED,Status.DISPATCHED,Status.REPORTED,Status.VERIFIED,Status.COMPLETED));
         query.addCriteria(Criteria.where("location").nearSphere(new GeoJsonPoint(longitude, latitude)).maxDistance(500.0/6378137.0));
         List<disasterEntity> disasters = mongoTemplate.find(query,disasterEntity.class);
         if(disasters.isEmpty()){
@@ -173,7 +175,11 @@ public class adminDashboardServiceImpl implements adminDashboardService{
                 dto.setReportCount(entity.getReportCount());
                 dto.setFinalConfidence(entity.getFinalConfidence());
                 template.convertAndSend("/topic/disaster/"+dnew.getAssignedAdminId(),dto);
-                template.convertAndSend("/queue/report"+dnew.getUserId(), new reportResponse(dnew.getDisasterId(),"Disaster is already reported.",entity.getStatus()));
+                if(entity.getStatus()==Status.COMPLETED){
+                    template.convertAndSend("/queue/report"+dnew.getUserId(), new reportResponse(dnew.getDisasterId(),"Disaster is already reported and completed.",entity.getStatus()));
+                }else{
+                    template.convertAndSend("/queue/report"+dnew.getUserId(), new reportResponse(dnew.getDisasterId(),"Disaster is already reported.",entity.getStatus()));
+                }
                 return true;
 
             }
@@ -193,6 +199,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             dto.setFinalConfidence(entity.getFinalConfidence());
             dto.setForces(entity.getForces());
             dto.setSeverity(entity.getSeverity());
+            dto.setStatus(entity.getStatus());
             dto.setReportCount(entity.getReportCount());
             dto.setState(entity.getState());
             dto.setAssignmentStatus(entity.getAssignmentStatus());
