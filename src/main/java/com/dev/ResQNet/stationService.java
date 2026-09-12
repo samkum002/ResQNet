@@ -11,7 +11,8 @@ public interface stationService {
 
     public ResponseEntity<?> approveMisssion(ObjectId dispatchId, String username);
 
-    public void newMission(ObjectId dispatchId, String username, Forces force);
+    public void newMission(ObjectId dispatchId, Forces force);
     ResponseEntity<?> completeMission(ObjectId dispatchId, String username);
     ResponseEntity<?> fakeMission(ObjectId dispatchId, String username);
+    ResponseEntity<?> requestBackup(String name, backupDTO dto, ObjectId dispatchId);
 }

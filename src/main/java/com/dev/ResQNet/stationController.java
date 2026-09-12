@@ -62,7 +62,7 @@ public class stationController {
         disaster.getRejectedStations().add(station.getStationId());
         disasterRepository.save(disaster);
         Forces force = station.getForceType();
-        stationservice.newMission(dispatchId,username,force);
+        stationservice.newMission(dispatchId,force);
 
         return ResponseEntity.ok("Dispatch rejected successfully.");
     }
