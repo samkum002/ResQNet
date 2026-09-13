@@ -10,4 +10,5 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 public interface  stationRepo extends MongoRepository<stationEntity, ObjectId>{
     
     List<stationEntity> findByStatusAndForceTypeAndStationIdNotInAndLocationNear(Station status,Forces forceType,Set<ObjectId> rejectedStationIds,GeoJsonPoint location);    
+    stationEntity findByUserId(ObjectId userId);
 }

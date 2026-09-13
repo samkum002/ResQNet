@@ -149,6 +149,58 @@ public class stationServiceImpl implements stationService {
 
         dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() ->new RuntimeException("Dispatch not found"));
 
+        if(dispatch.getStatus() == Status.BACKUP_REQUEST){
+
+            if (!dispatch.getStationId().equals(userRepository.findByUsername(username).getStationId())) {
+                return ResponseEntity.status(403).body("You are not authorized to approve this mission.");
+            }
+
+            backupEntity backup = backupRepo.findByDispatchId(dispatchId);
+
+            resourceEntity resource = resourceRepo.findById(dispatch.getStationId()).orElseThrow(() ->new RuntimeException("Station resource not found"));
+            disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+
+            stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() ->new RuntimeException("Station not found"));
+
+            if (disaster == null) {
+                return ResponseEntity.badRequest().body("Disaster not found.");
+            }
+
+            if (resource.getAvailablePersonnel() < backup.getReqPersonnel()) {
+                return ResponseEntity.badRequest().body("Not enough available personnel.");
+            }
+
+            if (resource.getAvailableVehicle() < backup.getReqVehicles()) {
+                return ResponseEntity.badRequest().body("Not enough available vehicles.");
+            }
+
+            resource.setAvailablePersonnel(resource.getAvailablePersonnel()- backup.getReqPersonnel());
+            resource.setAvailableVehicle(resource.getAvailableVehicle()- backup.getReqVehicles());
+            resourceRepo.save(resource);
+
+            dispatch.setStatus(Status.BACKUP_DISPATCHED);
+            dispatchRepository.save(dispatch);
+
+            disaster.setStatus(Status.BACKUP_DISPATCHED);
+            disaster.getStationId().add(station.getStationId());
+            disasterRepository.save(disaster);
+
+            backup.setStatus(backupStatus.ASSIGNED);
+            backup.setStationId(station.getStationId());
+            backup.setAssingnedAt(LocalDateTime.now());
+            backupRepo.save(backup);
+
+            List<ObjectId> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
+
+            userEntity worker = userRepository.findById(workers.get(0)).orElseThrow(() ->new RuntimeException("user not found"));
+            worker.setWorkerStatus(Admin.BUSY);
+            userRepository.save(worker);
+
+            messagingTemplate.convertAndSend("/new/mission" + workers.get(0), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId(),dispatch.getForceType(),backup.getReqVehicles(),backup.getReqPersonnel(),dispatch.getStatus()));
+            messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId(),"Backup Dispatch approved.",disaster.getStatus()));
+            return ResponseEntity.ok("Backup Dispatch approved successfully.");
+        }
+
         if (!dispatch.getStationId().equals(userRepository.findByUsername(username).getStationId())) {
             return ResponseEntity.status(403).body("You are not authorized to approve this mission.");
         }
@@ -200,6 +252,67 @@ public class stationServiceImpl implements stationService {
     public void newMission(ObjectId dispatchId, Forces force){
         
         dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
+
+        if(dispatch.getStatus() == Status.BACKUP_REQUEST){
+
+            backupEntity backup = backupRepo.findByDispatchId(dispatchId);
+            disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+        
+            List<stationEntity> stations = stationRepository.findByStatusAndForceTypeAndStationIdNotInAndLocationNear(Station.ACTIVE,force,disaster.getRejectedStations(),disaster.getLocation());
+            stations.sort((a, b) -> {
+                double distanceA = calculateDistance(disaster.getLocation(),a.getLocation());
+                double distanceB = calculateDistance(disaster.getLocation(),b.getLocation());
+                return Double.compare(distanceA, distanceB);
+            });
+
+            if (stations.isEmpty()) {
+
+                disaster.setStatus(Status.BACKUP_FAILED);
+                disasterRepository.save(disaster);
+
+                backup.setStatus(backupStatus.FAILED);
+                backupRepo.save(backup);
+
+                dispatch.setStatus(Status.BACKUP_FAILED);
+                dispatchRepository.save(dispatch);
+                
+                disasterDto dto = new disasterDto();
+                dto.setDisasterId(disaster.getDisasterId());
+                dto.setStatus(disaster.getStatus());
+                dto.setAiStatus(disaster.getAiStatus());
+                dto.setSeverity(disaster.getSeverity());
+                dto.setAiConfidence(disaster.getAiConfidence());
+                dto.setFinalConfidence(disaster.getFinalConfidence());
+                dto.setSuspicious(disaster.getSuspicious());
+                dto.setImage(disaster.getImage());
+                dto.setAssignmentStatus(disaster.getAssignmentStatus());
+                dto.setState(disaster.getState());
+                dto.setUserReport(disaster.getUserReport());
+                dto.setReportCount(disaster.getReportCount());
+                dto.setDisasterType(disaster.getDisasterType());
+                dto.setForces(Collections.singleton(force)); // this is the only force that failed to find a station so we set it in the dto by creating a singleton set
+                messagingTemplate.convertAndSend("/queue/report" + disaster.getAssignedAdminId(),dto);
+                return;
+            }
+
+            stationEntity station = stations.get(0);
+
+            backup.setStatus(backupStatus.ASSIGNED);
+            backup.setStationId(station.getStationId());
+            backup.setAssingnedAt(LocalDateTime.now());
+            backupRepo.save(backup);
+
+            dispatchDto dto = new dispatchDto();
+            dto.setDispatchId(dispatchId);
+            dto.setSeverity(dispatch.getSeverity());
+            dto.setForceType(dispatch.getForceType());
+            dto.setAssignedVehicle(backup.getReqVehicles());
+            dto.setAssignedPersonnel(backup.getReqPersonnel());
+            dto.setStatus(dispatch.getStatus());
+            messagingTemplate.convertAndSend("/update/mission" + station.getUserId(), dto);
+            return;
+        }
+
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
         
         List<stationEntity> stations = stationRepository.findByStatusAndForceTypeAndStationIdNotInAndLocationNear(Station.ACTIVE,force,disaster.getRejectedStations(),disaster.getLocation());
@@ -222,7 +335,7 @@ public class stationServiceImpl implements stationService {
             dto.setSuspicious(disaster.getSuspicious());
             dto.setImage(disaster.getImage());
             dto.setAssignmentStatus(disaster.getAssignmentStatus());
-            dto.setState(dto.getState());
+            dto.setState(disaster.getState());
             dto.setUserReport(disaster.getUserReport());
             dto.setReportCount(disaster.getReportCount());
             dto.setDisasterType(disaster.getDisasterType());
@@ -232,23 +345,17 @@ public class stationServiceImpl implements stationService {
         }
 
         stationEntity station = stations.get(0);
-        dispatchEntity newDispatch = new dispatchEntity();
-        newDispatch.setDisasterId(disaster.getDisasterId());
-        newDispatch.setStationId(station.getStationId());
-        newDispatch.setAssignedVehicle(dispatch.getAssignedVehicle());
-        newDispatch.setAssignedPersonnel(dispatch.getAssignedPersonnel());
-        newDispatch.setForceType(force);
-        newDispatch.setSeverity(disaster.getSeverity());
-        newDispatch.setStatus(Status.VERIFIED);
-        dispatchRepository.save(newDispatch);
+
+        dispatch.setStationId(station.getStationId());
+        dispatchRepository.save(dispatch);
 
         dispatchDto dto = new dispatchDto();
-        dto.setDispatchId(newDispatch.getDispatchId());
-        dto.setSeverity(newDispatch.getSeverity());
-        dto.setForceType(newDispatch.getForceType());
-        dto.setAssignedVehicle(newDispatch.getAssignedVehicle());
-        dto.setAssignedPersonnel(newDispatch.getAssignedPersonnel());
-        dto.setStatus(newDispatch.getStatus());
+        dto.setDispatchId(dispatch.getDispatchId());
+        dto.setSeverity(dispatch.getSeverity());
+        dto.setForceType(dispatch.getForceType());
+        dto.setAssignedVehicle(dispatch.getAssignedVehicle());
+        dto.setAssignedPersonnel(dispatch.getAssignedPersonnel());
+        dto.setStatus(dispatch.getStatus());
         messagingTemplate.convertAndSend("/update/mission" + station.getUserId(), dto);        
     }
 
@@ -258,6 +365,40 @@ public class stationServiceImpl implements stationService {
 
         dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
         userEntity worker = userRepository.findByUsername(username);
+        stationEntity station = stationRepository.findByUserId(worker.getUserId());
+
+        if(dispatch.getStatus() == Status.BACKUP_DISPATCHED){
+
+            backupEntity backup = backupRepo.findByDispatchId(dispatchId);            
+
+            if (!dispatch.getStationId().equals(worker.getStationId())){
+                return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
+            }
+
+            resourceEntity resource = resourceRepo.findById(dispatch.getStationId()).orElseThrow(() -> new RuntimeException("Station resource not found"));
+            resource.setAvailablePersonnel(resource.getAvailablePersonnel() + backup.getReqPersonnel());
+            resource.setAvailableVehicle(resource.getAvailableVehicle() + backup.getReqVehicles());
+            resourceRepo.save(resource);
+
+            backup.setStatus(backupStatus.COMPLETED);
+            backupRepo.save(backup);
+
+            dispatch.setStatus(Status.COMPLETED);
+            dispatch.setCompletedAt(LocalDateTime.now());
+            dispatchRepository.save(dispatch);
+
+            disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+            disaster.setStatus(Status.COMPLETED);
+            disaster.setCompletedAt(dispatch.getCompletedAt());
+            disasterRepository.save(disaster);
+
+            worker.setWorkerStatus(Admin.AVAILABLE);
+            userRepository.save(worker);
+            
+            messagingTemplate.convertAndSend("/new/mission" + station.getUserId(), new reportResponse(disaster.getDisasterId(), "Backup Mission completed.", disaster.getStatus()));
+            messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Backup Mission completed.", disaster.getStatus()));
+            return ResponseEntity.ok("Backup Dispatch completed successfully.");
+        }
 
         if (!dispatch.getStationId().equals(worker.getStationId())){
             return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
@@ -286,7 +427,11 @@ public class stationServiceImpl implements stationService {
         userEntity user = userRepository.findById(disaster.getUserId()).orElseThrow(() -> new RuntimeException("User not found"));
         user.setTrustScore(user.getTrustScore() + 10);
         userRepository.save(user);
+
+        worker.setWorkerStatus(Admin.AVAILABLE);
+        userRepository.save(worker);
         
+        messagingTemplate.convertAndSend("/new/mission" + station.getUserId(), new reportResponse(disaster.getDisasterId(), "Mission completed.", disaster.getStatus()));
         messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Mission completed.", disaster.getStatus()));
         messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId(), "Mission completed.", disaster.getStatus()));
         return ResponseEntity.ok("Dispatch completed successfully.");
@@ -327,6 +472,9 @@ public class stationServiceImpl implements stationService {
         userEntity user = userRepository.findById(disaster.getUserId()).orElseThrow(() -> new RuntimeException("User not found"));
         user.setTrustScore(Math.max(0, user.getTrustScore() - 20));
         userRepository.save(user);
+
+        worker.setWorkerStatus(Admin.AVAILABLE);
+        userRepository.save(worker);
         
         messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Mission marked as fake.", disaster.getStatus()));
         messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId(), "Mission marked as fake. Please do not spam this platform.", disaster.getStatus()));
@@ -338,12 +486,16 @@ public class stationServiceImpl implements stationService {
     @Transactional
     public ResponseEntity<?> requestBackup(String username, backupDTO dto, ObjectId dispatchId) {
 
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("dispatch not found"));
         userEntity user = userRepository.findByUsername(username);
+
+        if (dispatch.getStatus() != Status.DISPATCHED){
+            return ResponseEntity.status(403).body("Dispatch is yet to take place.");
+        }
+
         if(!user.getRoles().contains("WORKER")){
             return ResponseEntity.status(403).body("Only workers can request backup.");
         }
-
-        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("dispatch not found"));
 
         if (!dispatch.getStationId().equals(user.getStationId())) {
             return ResponseEntity.status(403).body("You are not authorized to request backup for this dispatch.");

@@ -4,5 +4,5 @@ package com.dev.ResQNet;
  * backupStatus
  */
 public enum backupStatus {
-    PENDING, ASSIGNED, DISPATCHED, COMPLETED, CANCELLED, FAILED
+    PENDING, ASSIGNED, DISPATCHED, COMPLETED, CANCELLED, FAILED 
 }
