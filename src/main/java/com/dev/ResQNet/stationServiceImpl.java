@@ -187,7 +187,9 @@ public class stationServiceImpl implements stationService {
         disaster.getStationId().add(station.getStationId());
         disasterRepository.save(disaster);
 
-        messagingTemplate.convertAndSend("/new/mission" + station.getWorkerId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
+        List<ObjectId> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
+
+        messagingTemplate.convertAndSend("/new/mission" + workers.get(0), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
         messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
         messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
         return ResponseEntity.ok("Dispatch approved successfully.");

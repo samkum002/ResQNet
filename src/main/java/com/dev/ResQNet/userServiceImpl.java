@@ -30,6 +30,7 @@ public class userServiceImpl implements userService{
         entity.setPassword(encoder.encode(dto.getPassword()));
         entity.setEmail(dto.getEmail());
         entity.setRoles(Arrays.asList("USER"));
+        // entity.setWorkerStatus(Admin.AVAILABLE);
         // entity.setStationId(dto.getStationId());
         entity.setTrustScore(50);
         // entity.setAdminState("UTTAR PRADESH");

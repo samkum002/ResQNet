@@ -35,5 +35,6 @@ public class userEntity {
     private String adminState;
     private Integer activeIncidents;
     private Admin adminStatus;
+    private Admin workerStatus;
 
 }
