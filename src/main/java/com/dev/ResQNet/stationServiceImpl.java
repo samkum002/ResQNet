@@ -178,10 +178,10 @@ public class stationServiceImpl implements stationService {
             resource.setAvailableVehicle(resource.getAvailableVehicle()- backup.getReqVehicles());
             resourceRepo.save(resource);
 
-            dispatch.setStatus(Status.BACKUP_DISPATCHED);
+            dispatch.setStatus(Status.BACKUP_ASSIGNED);
             dispatchRepository.save(dispatch);
 
-            disaster.setStatus(Status.BACKUP_DISPATCHED);
+            disaster.setStatus(Status.BACKUP_ASSIGNED);
             disaster.getStationId().add(station.getStationId());
             disasterRepository.save(disaster);
 
@@ -296,6 +296,13 @@ public class stationServiceImpl implements stationService {
             }
 
             stationEntity station = stations.get(0);
+
+            dispatch.setStatus(Status.BACKUP_ASSIGNED);
+            dispatchRepository.save(dispatch);
+
+            disaster.setStatus(Status.BACKUP_ASSIGNED);
+            disaster.getStationId().add(station.getStationId());
+            disasterRepository.save(disaster);
 
             backup.setStatus(backupStatus.ASSIGNED);
             backup.setStationId(station.getStationId());
