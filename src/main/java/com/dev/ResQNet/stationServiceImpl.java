@@ -56,6 +56,11 @@ public class stationServiceImpl implements stationService {
     @Async
     public void findStation(ObjectId disasterId,Integer newTrucks, Integer newPersonnel) {
         disasterEntity disaster = disasterRepository.findByDisasterId(disasterId);
+
+        if(disaster == null){
+            return;
+        }
+
         double []weights = new double[disaster.getForces().size()];
         switch (disaster.getForces().size()) {
             case 1:
@@ -257,6 +262,10 @@ public class stationServiceImpl implements stationService {
 
             backupEntity backup = backupRepo.findByDispatchId(dispatchId);
             disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+
+            if(disaster == null){
+                return;
+            }
         
             List<stationEntity> stations = stationRepository.findByStatusAndForceTypeAndStationIdNotInAndLocationNear(Station.ACTIVE,force,disaster.getRejectedStations(),disaster.getLocation());
             stations.sort((a, b) -> {
@@ -321,6 +330,10 @@ public class stationServiceImpl implements stationService {
         }
 
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+
+        if(disaster == null){
+            return;
+        }
         
         List<stationEntity> stations = stationRepository.findByStatusAndForceTypeAndStationIdNotInAndLocationNear(Station.ACTIVE,force,disaster.getRejectedStations(),disaster.getLocation());
         stations.sort((a, b) -> {
@@ -395,6 +408,11 @@ public class stationServiceImpl implements stationService {
             dispatchRepository.save(dispatch);
 
             disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+
+            if(disaster == null){
+                return ResponseEntity.badRequest().body("Disaster not found.");
+            }
+
             disaster.setStatus(Status.COMPLETED);
             disaster.setCompletedAt(dispatch.getCompletedAt());
             disasterRepository.save(disaster);
@@ -423,6 +441,11 @@ public class stationServiceImpl implements stationService {
         dispatchRepository.save(dispatch);
 
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+
+        if(disaster == null){
+            return ResponseEntity.badRequest().body("Disaster not found.");
+        }
+
         disaster.setStatus(Status.COMPLETED);
         disaster.setCompletedAt(dispatch.getCompletedAt());
         disasterRepository.save(disaster);
@@ -468,6 +491,11 @@ public class stationServiceImpl implements stationService {
         dispatchRepository.save(dispatch);
 
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+
+        if(disaster == null){
+            return ResponseEntity.badRequest().body("Disaster not found.");
+        }
+
         disaster.setStatus(Status.DISPATCH_CANCELLED);
         disaster.setCompletedAt(dispatch.getCompletedAt());
         disasterRepository.save(disaster);

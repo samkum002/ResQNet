@@ -219,6 +219,12 @@ public class adminDashboardServiceImpl implements adminDashboardService{
     @Transactional
     public ResponseEntity<?> disasterApprove(ObjectId disasterId){
         disasterEntity disaster = DisasterRepo.findByDisasterId(disasterId);
+        if(disaster == null){
+            return ResponseEntity.notFound().build();
+        }
+        if(disaster.getStatus() == Status.VERIFIED || disaster.getStatus() == Status.REJECTED){
+            return ResponseEntity.badRequest().body("Disaster has already been processed.");
+        }
         userEntity user = userrepo.findByUserId(disaster.getUserId());
         Double conf = disaster.getFinalConfidence();
         Double multiplier = 0.0;
@@ -267,6 +273,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         disasterEntity disaster = DisasterRepo.findByDisasterId(disasterId);
         if(disaster==null){
             return ResponseEntity.notFound().build();
+        }
+        if(disaster.getStatus() == Status.VERIFIED || disaster.getStatus() == Status.REJECTED){
+            return ResponseEntity.badRequest().body("Disaster has already been processed.");
         }
         disaster.setStatus(Status.REJECTED);
         DisasterRepo.save(disaster);
