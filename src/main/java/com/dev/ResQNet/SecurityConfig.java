@@ -26,6 +26,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
 
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/disaster/**").hasRole("USER")
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 .requestMatchers("/station/**").hasRole("STATION_MANAGER")
                 .requestMatchers("/backup/**").hasRole("WORKER")

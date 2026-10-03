@@ -13,8 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.csrf.CsrfToken;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -50,13 +48,16 @@ public class disasterController {
     @Autowired
     private userRepo userrepo;
 
+    @Autowired
+    private ReverseGeocodingService reverseGeocoding;
+
     // @GetMapping("/csrf")
     // public CsrfToken csrf(CsrfToken token) {
     //     return token;
     // }
 
     @PostMapping("/report")
-    public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("state") String state,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude,@Valid @NotBlank(message="Please Enter valid Disaster Cause in one word only.")@Pattern(regexp="^[A-Za-z]+$")@RequestParam("userReport") String userReport) throws IOException{
+    public ResponseEntity<?> imageUpload(@RequestParam("image") MultipartFile image,@RequestParam("longitude") Double longitude,@RequestParam("latitude") Double latitude,@Valid @NotBlank(message="Please Enter valid Disaster Cause in one word only.")@Pattern(regexp="^[A-Za-z]+$")@RequestParam("userReport") String userReport) throws IOException{
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
@@ -75,7 +76,6 @@ public class disasterController {
         disaster.setAiConfidence(0);
         disaster.setFinalConfidence(0.0);
         disaster.setSuspicious(false);
-        disaster.setState(state);
         disaster.setLocation(new GeoJsonPoint(longitude,latitude));
         disaster.setAssignmentStatus(Assignment.CREATED);
         byte[] image_bytes = image.getBytes();
@@ -84,6 +84,7 @@ public class disasterController {
         ObjectId image_store = gridFsTemplate.store(image_to_stream,image.getOriginalFilename(),content);
         disaster.setImage(image_store);
         disasterrepo.save(disaster);
+        reverseGeocoding.findAndSaveState(disaster,latitude,longitude);
         ObjectId disasterId = disaster.getDisasterId();
         boolean isDuplicate = dashboardService.checkDuplicateDisasters(latitude, longitude,disaster.getState(),disasterId);
         if(!isDuplicate){
