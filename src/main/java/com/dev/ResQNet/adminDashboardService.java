@@ -16,4 +16,6 @@ public interface  adminDashboardService {
     ResponseEntity<List<disasterDto>> disasterList(ObjectId userId);
     ResponseEntity<?> disasterApprove(ObjectId disasterId);
     ResponseEntity<?> disasterReject(ObjectId disasterId);
+
+    public ResponseEntity<Stats> dashboardStats(ObjectId userId);
 }

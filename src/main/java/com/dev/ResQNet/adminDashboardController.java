@@ -39,6 +39,17 @@ public class adminDashboardController {
         return adminDashboardservice.disasterList(user.getUserId());
     }
 
+    @GetMapping("/stats")
+    public ResponseEntity<Stats> dashboardStats(){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String name = auth.getName();
+        userEntity user = userrepo.findByUsername(name);
+        if(user==null){
+            return ResponseEntity.notFound().build();
+        }
+        return adminDashboardservice.dashboardStats(user.getUserId());
+    }
+
     @PostMapping("/{disasterId}/approve")
     public ResponseEntity<?> approveDisaster(@PathVariable ObjectId disasterId,@RequestBody(required=false) disasterDto dto){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -66,6 +77,11 @@ public class adminDashboardController {
             }
             disasterrepo.save(disaster);
         }
+        if(disaster.getAssignmentStatus() == Assignment.REASSIGNED){
+            user.setActiveIncidents(user.getActiveIncidents()+1);
+            disaster.setAssignedAdminId(user.getUserId());
+            userrepo.save(user);
+        }
         return adminDashboardservice.disasterApprove(disasterId);
     }
     
@@ -76,6 +92,15 @@ public class adminDashboardController {
         userEntity user = userrepo.findByUsername(name);
         if(user==null){
             return ResponseEntity.notFound().build();
+        }
+        disasterEntity disaster = disasterrepo.findByDisasterId(disasterId);
+        if(disaster==null){
+            return ResponseEntity.notFound().build();
+        }
+        if(disaster.getAssignmentStatus() == Assignment.REASSIGNED){
+            user.setActiveIncidents(user.getActiveIncidents()+1);
+            disaster.setAssignedAdminId(user.getUserId());
+            userrepo.save(user);
         }
         return adminDashboardservice.disasterReject(disasterId);
     }

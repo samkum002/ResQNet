@@ -183,7 +183,13 @@ public class stationServiceImpl implements stationService {
             resource.setAvailableVehicle(resource.getAvailableVehicle()- backup.getReqVehicles());
             resourceRepo.save(resource);
 
+            List<ObjectId> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
+            userEntity worker = userRepository.findById(workers.get(0)).orElseThrow(() ->new RuntimeException("user not found"));
+            worker.setWorkerStatus(Admin.BUSY);
+            userRepository.save(worker);
+
             dispatch.setStatus(Status.BACKUP_ASSIGNED);
+            dispatch.setWorkerId(worker.getUserId());
             dispatchRepository.save(dispatch);
 
             disaster.setStatus(Status.BACKUP_ASSIGNED);
@@ -194,12 +200,6 @@ public class stationServiceImpl implements stationService {
             backup.setStationId(station.getStationId());
             backup.setAssingnedAt(LocalDateTime.now());
             backupRepo.save(backup);
-
-            List<ObjectId> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
-
-            userEntity worker = userRepository.findById(workers.get(0)).orElseThrow(() ->new RuntimeException("user not found"));
-            worker.setWorkerStatus(Admin.BUSY);
-            userRepository.save(worker);
 
             messagingTemplate.convertAndSend("/new/mission" + workers.get(0), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId(),dispatch.getForceType(),backup.getReqVehicles(),backup.getReqPersonnel(),dispatch.getStatus()));
             messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId(),"Backup Dispatch approved.",disaster.getStatus()));
@@ -235,7 +235,13 @@ public class stationServiceImpl implements stationService {
         resource.setAvailableVehicle(resource.getAvailableVehicle()- dispatch.getAssignedVehicle());
         resourceRepo.save(resource);
 
+        List<ObjectId> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
+        userEntity worker = userRepository.findById(workers.get(0)).orElseThrow(() ->new RuntimeException("user not found"));
+        worker.setWorkerStatus(Admin.BUSY);
+        userRepository.save(worker);
+
         dispatch.setStatus(Status.DISPATCHED);
+        dispatch.setWorkerId(worker.getUserId());
         dispatch.setDispatchedAt(LocalDateTime.now());
         dispatchRepository.save(dispatch);
 
@@ -244,9 +250,7 @@ public class stationServiceImpl implements stationService {
         disaster.getStationId().add(station.getStationId());
         disasterRepository.save(disaster);
 
-        List<ObjectId> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
-
-        messagingTemplate.convertAndSend("/new/mission" + workers.get(0), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
+        messagingTemplate.convertAndSend("/new/mission" + worker.getUserId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
         messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
         messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
         return ResponseEntity.ok("Dispatch approved successfully.");
@@ -417,9 +421,20 @@ public class stationServiceImpl implements stationService {
             disaster.setCompletedAt(dispatch.getCompletedAt());
             disasterRepository.save(disaster);
 
-            worker.setWorkerStatus(Admin.AVAILABLE);
-            userRepository.save(worker);
-            
+            userEntity workerr = userRepository.findById(backup.getWorkerId()).orElseThrow(() -> new RuntimeException("User not found"));
+            workerr.setWorkerStatus(Admin.AVAILABLE);
+            userRepository.save(workerr);
+
+            if(!station.getStationId().equals(backup.getStationId())){
+                stationEntity st = stationRepository.findById(backup.getStationId()).orElseThrow(() -> new RuntimeException("Station not found"));
+                userEntity w = userRepository.findById(st.getUserId()).orElseThrow(() -> new RuntimeException("Station not found"));
+                Stats stats = w.getStats();
+                stats.setCompleted(stats.getCompleted() + 1);
+                stats.setTotalAssigned(stats.getTotalAssigned() + 1);
+                w.setStats(stats);
+                userRepository.save(w);        
+            }
+
             messagingTemplate.convertAndSend("/new/mission" + station.getUserId(), new reportResponse(disaster.getDisasterId(), "Backup Mission completed.", disaster.getStatus()));
             messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Backup Mission completed.", disaster.getStatus()));
             return ResponseEntity.ok("Backup Dispatch completed successfully.");
@@ -452,14 +467,25 @@ public class stationServiceImpl implements stationService {
 
         userEntity admin = userRepository.findById(disaster.getAssignedAdminId()).orElseThrow(() -> new RuntimeException("User not found"));
         admin.setActiveIncidents(admin.getActiveIncidents()-1);
+        Stats stat = admin.getStats();
+        stat.setCompleted(stat.getCompleted() + 1);
+        stat.setTotalAssigned(stat.getTotalAssigned() + 1);
+        admin.setStats(stat);
         userRepository.save(admin);
 
         userEntity user = userRepository.findById(disaster.getUserId()).orElseThrow(() -> new RuntimeException("User not found"));
         user.setTrustScore(user.getTrustScore() + 10);
         userRepository.save(user);
 
-        worker.setWorkerStatus(Admin.AVAILABLE);
-        userRepository.save(worker);
+        userEntity workerr = userRepository.findById(dispatch.getWorkerId()).orElseThrow(() -> new RuntimeException("User not found"));
+        workerr.setWorkerStatus(Admin.AVAILABLE);
+        userRepository.save(workerr);
+
+        Stats stats = worker.getStats();
+        stats.setCompleted(stats.getCompleted() + 1);
+        stats.setTotalAssigned(stats.getTotalAssigned() + 1);
+        worker.setStats(stats);
+        userRepository.save(worker);        
         
         messagingTemplate.convertAndSend("/new/mission" + station.getUserId(), new reportResponse(disaster.getDisasterId(), "Mission completed.", disaster.getStatus()));
         messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Mission completed.", disaster.getStatus()));
@@ -502,14 +528,25 @@ public class stationServiceImpl implements stationService {
 
         userEntity admin = userRepository.findById(disaster.getAssignedAdminId()).orElseThrow(() -> new RuntimeException("User not found"));
         admin.setActiveIncidents(admin.getActiveIncidents()-1);
+        Stats stat = admin.getStats();
+        stat.setMarkedFalse(stat.getMarkedFalse() + 1);
+        stat.setTotalAssigned(stat.getTotalAssigned() + 1);
+        admin.setStats(stat);
         userRepository.save(admin);
 
         userEntity user = userRepository.findById(disaster.getUserId()).orElseThrow(() -> new RuntimeException("User not found"));
         user.setTrustScore(Math.max(0, user.getTrustScore() - 20));
         userRepository.save(user);
 
-        worker.setWorkerStatus(Admin.AVAILABLE);
-        userRepository.save(worker);
+        userEntity workerr = userRepository.findById(dispatch.getWorkerId()).orElseThrow(() -> new RuntimeException("User not found"));
+        workerr.setWorkerStatus(Admin.AVAILABLE);
+        userRepository.save(workerr);
+
+        Stats stats = worker.getStats();
+        stats.setMarkedFalse(stats.getMarkedFalse() + 1);
+        stats.setTotalAssigned(stats.getTotalAssigned() + 1);
+        worker.setStats(stats);
+        userRepository.save(worker);        
         
         messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Mission marked as fake.", disaster.getStatus()));
         messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId(), "Mission marked as fake. Please do not spam this platform.", disaster.getStatus()));

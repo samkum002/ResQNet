@@ -52,6 +52,13 @@ public class stationController {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
 
+        userEntity manager = userRepository.findByUsername(username);
+        Stats stats = manager.getStats();
+        stats.setFalseReports(stats.getFalseReports() + 1);
+        stats.setTotalAssigned(stats.getTotalAssigned() + 1);
+        manager.setStats(stats);
+        userRepository.save(manager);        
+
         dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
 
         if (!dispatch.getStationId().equals(userRepository.findByUsername(username).getStationId())) {

@@ -31,4 +31,5 @@ public class dispatchEntity {
     private LocalDateTime dispatchedAt;
     @LastModifiedDate
     private LocalDateTime completedAt;
+    private ObjectId workerId;
 }

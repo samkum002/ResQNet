@@ -128,6 +128,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             for(userEntity admin : filteredAdmins){
                 if(!admin.getUserId().equals(adminId)){
                     entity.setAssignmentStatus(Assignment.REASSIGNED);
+                    entity.setAssignedAt(LocalDateTime.now());
                     DisasterRepo.save(entity);
                     dto.setAssignmentStatus(entity.getAssignmentStatus());
                     template.convertAndSend("/topic/Disaster/"+admin.getUserId(), dto);
@@ -284,10 +285,23 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         userrepo.save(user);
         userEntity admin = userrepo.findByUserId(disaster.getAssignedAdminId());
         admin.setActiveIncidents(user.getActiveIncidents()-1);
+        Stats stat = admin.getStats();
+        stat.setFalseReports(stat.getFalseReports() + 1);
+        stat.setTotalAssigned(stat.getTotalAssigned() + 1);
+        admin.setStats(stat);
         userrepo.save(admin);
         template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId(),
         "Disaster is rejected. Kindly don't spam the management system",disaster.getStatus()));
         return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been rejected",disaster.getStatus()));   
+    }
+
+    @Override
+    public ResponseEntity<Stats> dashboardStats(ObjectId userId) {
+        userEntity user = userrepo.findByUserId(userId);
+        if(user == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(user.getStats());
     }
 
 }

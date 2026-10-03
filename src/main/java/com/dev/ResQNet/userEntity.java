@@ -36,5 +36,6 @@ public class userEntity {
     private Integer activeIncidents;
     private Admin adminStatus;
     private Admin workerStatus;
+    private Stats stats;
 
 }
