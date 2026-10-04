@@ -74,14 +74,14 @@ public class stationController {
         return ResponseEntity.ok("Dispatch rejected successfully.");
     }
 
-    @PostMapping("/{dispatchId}/complete")
+    @GetMapping("/{dispatchId}/complete")
     public ResponseEntity<?> completeDispatch(@PathVariable ObjectId dispatchId){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
         return stationservice.completeMission(dispatchId,username);
     }
 
-    @PostMapping("/{dispatchId}/fake")
+    @GetMapping("/{dispatchId}/fake")
     public ResponseEntity<?> fakeDispatch(@PathVariable ObjectId dispatchId){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();

@@ -9,12 +9,12 @@ import lombok.Setter;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-public class dispatchDto {
+public class dtoBackup {
     
     private Severity severity;
-    private String dispatchId;
+    private String backupId;
     private Forces forceType;
     private Integer assignedVehicle;
     private Integer assignedPersonnel;
-    private Status status;
+    private backupStatus status;
 }

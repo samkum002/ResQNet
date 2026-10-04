@@ -20,6 +20,7 @@ public class backupEntity {
     
     @Id 
     private ObjectId backupId;
+    private Severity severity;
     private ObjectId disasterId;
     private ObjectId stationId;
     private ObjectId dispatchId;

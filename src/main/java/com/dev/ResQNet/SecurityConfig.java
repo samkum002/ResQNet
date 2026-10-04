@@ -29,7 +29,7 @@ public class SecurityConfig {
                 .requestMatchers("/disaster/**").hasRole("USER")
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 .requestMatchers("/station/**").hasRole("STATION_MANAGER")
-                .requestMatchers("/backup/**").hasRole("WORKER")
+                .requestMatchers("/dispatch/**").hasRole("WORKER")
                 .anyRequest().permitAll()
             )
 
