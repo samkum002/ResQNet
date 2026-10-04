@@ -33,7 +33,7 @@ public class stationController {
     private disasterRepo disasterRepository;
 
     @GetMapping("/missions")
-    public ResponseEntity<List<dispatchDto>> getMissions(){
+    public ResponseEntity<stationDashboard> getMissions(){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
         return stationservice.getMissionsForStation(username);

@@ -13,9 +13,8 @@ public interface  adminDashboardService {
     void reassignDisaster();
     void calculateFinalVal(ObjectId disasterId);
     boolean checkDuplicateDisasters(double latitude,double longitude,String state,ObjectId disasterId);
-    ResponseEntity<List<disasterDto>> disasterList(ObjectId userId);
+    ResponseEntity<adminDashboard> disasterList(ObjectId userId);
     ResponseEntity<?> disasterApprove(ObjectId disasterId);
     ResponseEntity<?> disasterReject(ObjectId disasterId);
 
-    public ResponseEntity<Stats> dashboardStats(ObjectId userId);
 }

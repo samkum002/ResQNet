@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Set;
 
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -189,7 +188,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
     }
 
     @Override
-    public ResponseEntity<List<disasterDto>> disasterList(ObjectId userId){
+    public ResponseEntity<adminDashboard> disasterList(ObjectId userId){
         List<disasterEntity> disasters = DisasterRepo.findByAssignedAdminIdAndStatus(userId,Status.UNDER_REVIEW);
         List<disasterDto> dtos = new ArrayList<>();
         for(disasterEntity entity : disasters){
@@ -209,10 +208,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             dto.setDisasterId(entity.getDisasterId());
             dtos.add(dto);
         }
-        if(dtos.isEmpty()){
-            return ResponseEntity.noContent().build();
-        }
-        return ResponseEntity.ok(dtos);
+        userEntity user = userrepo.findByUserId(userId);
+        Stats stats = user.getStats();
+        return ResponseEntity.ok(new adminDashboard(stats, dtos));
     }
 
     
@@ -229,7 +227,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         userEntity user = userrepo.findByUserId(disaster.getUserId());
         Double conf = disaster.getFinalConfidence();
         Double multiplier = 0.0;
-        Set<Forces> forces = disaster.getForces();
+        // Set<Forces> forces = disaster.getForces();
         Severity severity = disaster.getSeverity();
         Integer trucks = 0;
         Integer personnel = 0;
@@ -293,15 +291,6 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId(),
         "Disaster is rejected. Kindly don't spam the management system",disaster.getStatus()));
         return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been rejected",disaster.getStatus()));   
-    }
-
-    @Override
-    public ResponseEntity<Stats> dashboardStats(ObjectId userId) {
-        userEntity user = userrepo.findByUserId(userId);
-        if(user == null) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(user.getStats());
     }
 
 }

@@ -1,6 +1,5 @@
 package com.dev.ResQNet;
 
-import java.util.List;
 
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +28,7 @@ public class adminDashboardController {
     private disasterRepo disasterrepo;
 
     @GetMapping("/disasters")
-    public ResponseEntity<List<disasterDto>> disasterAssigned(){
+    public ResponseEntity<adminDashboard> disasterAssigned(){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
         userEntity user = userrepo.findByUsername(name);
@@ -37,17 +36,6 @@ public class adminDashboardController {
             return ResponseEntity.notFound().build();
         }
         return adminDashboardservice.disasterList(user.getUserId());
-    }
-
-    @GetMapping("/stats")
-    public ResponseEntity<Stats> dashboardStats(){
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        String name = auth.getName();
-        userEntity user = userrepo.findByUsername(name);
-        if(user==null){
-            return ResponseEntity.notFound().build();
-        }
-        return adminDashboardservice.dashboardStats(user.getUserId());
     }
 
     @PostMapping("/{disasterId}/approve")
@@ -79,7 +67,7 @@ public class adminDashboardController {
         }
         if(disaster.getAssignmentStatus() == Assignment.REASSIGNED){
             user.setActiveIncidents(user.getActiveIncidents()+1);
-            disaster.setAssignedAdminId(user.getUserId());
+            disaster.setAssignedAdminId(user.getUserId()); disasterrepo.save(disaster);
             userrepo.save(user);
         }
         return adminDashboardservice.disasterApprove(disasterId);
@@ -99,7 +87,7 @@ public class adminDashboardController {
         }
         if(disaster.getAssignmentStatus() == Assignment.REASSIGNED){
             user.setActiveIncidents(user.getActiveIncidents()+1);
-            disaster.setAssignedAdminId(user.getUserId());
+            disaster.setAssignedAdminId(user.getUserId()); disasterrepo.save(disaster);
             userrepo.save(user);
         }
         return adminDashboardservice.disasterReject(disasterId);

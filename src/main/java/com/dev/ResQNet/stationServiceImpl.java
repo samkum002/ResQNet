@@ -127,7 +127,7 @@ public class stationServiceImpl implements stationService {
     }
 
     @Override
-    public ResponseEntity<List<dispatchDto>> getMissionsForStation(String username) {
+    public ResponseEntity<stationDashboard> getMissionsForStation(String username) {
         userEntity user = userRepository.findByUsername(username);
         List<dispatchEntity> dispatches = dispatchRepository.findByStationIdAndStatus(user.getStationId(), Status.VERIFIED);
         List<dispatchDto> dispatchDtos = new ArrayList<>();
@@ -141,10 +141,8 @@ public class stationServiceImpl implements stationService {
             dto.setStatus(dispatch.getStatus());
             dispatchDtos.add(dto);
         }
-        if(dispatchDtos.isEmpty()){
-            return ResponseEntity.noContent().build();
-        }
-        return ResponseEntity.ok(dispatchDtos);
+        Stats stats = user.getStats();
+        return ResponseEntity.ok(new stationDashboard(stats,dispatchDtos));
 
     }
 
