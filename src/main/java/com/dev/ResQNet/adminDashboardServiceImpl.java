@@ -69,13 +69,13 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         entity.setAssignmentStatus(Assignment.ASSIGNED);
         sortedAdmin.setActiveIncidents(sortedAdmin.getActiveIncidents()+1);
         DisasterRepo.save(entity);
-        template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(entity.getDisasterId(),"Disaster is under review.",entity.getStatus()));
+        template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(entity.getDisasterId().toHexString(),"Disaster is under review.",entity.getStatus()));
         if(sortedAdmin.getActiveIncidents()>3){
             sortedAdmin.setAdminStatus(Admin.BUSY);
         }
         userrepo.save(sortedAdmin);
         disasterDto dto = new disasterDto();
-        dto.setDisasterId(entity.getDisasterId());
+        dto.setDisasterId(entity.getDisasterId().toHexString());
         dto.setSuspicious(entity.getSuspicious());
         dto.setAiConfidence(entity.getAiConfidence());
         dto.setAiStatus(entity.getAiStatus());
@@ -85,7 +85,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         dto.setDisasterType(entity.getDisasterType());
         dto.setForces(entity.getForces());
         dto.setFinalConfidence(entity.getFinalConfidence());
-        dto.setImage(entity.getImage());
+        dto.setImage(entity.getImage().toHexString());
         dto.setState(entity.getState());
         dto.setSeverity(entity.getSeverity());
         dto.setSuspicious(entity.getSuspicious());
@@ -107,7 +107,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         List<disasterEntity> Alldisasters = DisasterRepo.findByAssignmentStatus(Assignment.TIMEOUT);
         for(disasterEntity entity : Alldisasters){
             disasterDto dto = new disasterDto();
-            dto.setDisasterId(entity.getDisasterId());
+            dto.setDisasterId(entity.getDisasterId().toHexString());
             dto.setSuspicious(entity.getSuspicious());
             dto.setAiConfidence(entity.getAiConfidence());
             dto.setAiStatus(entity.getAiStatus());
@@ -115,7 +115,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             dto.setUserReport(entity.getUserReport());
             dto.setForces(entity.getForces());
             dto.setFinalConfidence(entity.getFinalConfidence());
-            dto.setImage(entity.getImage());
+            dto.setImage(entity.getImage().toHexString());
             dto.setState(entity.getState());
             dto.setStatus(entity.getStatus());
             dto.setSeverity(entity.getSeverity());
@@ -176,9 +176,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
                 dto.setFinalConfidence(entity.getFinalConfidence());
                 template.convertAndSend("/topic/disaster/"+dnew.getAssignedAdminId(),dto);
                 if(entity.getStatus()==Status.COMPLETED){
-                    template.convertAndSend("/queue/report"+dnew.getUserId(), new reportResponse(dnew.getDisasterId(),"Disaster is already reported and completed.",entity.getStatus()));
+                    template.convertAndSend("/queue/report"+dnew.getUserId(), new reportResponse(dnew.getDisasterId().toHexString(),"Disaster is already reported and completed.",entity.getStatus()));
                 }else{
-                    template.convertAndSend("/queue/report"+dnew.getUserId(), new reportResponse(dnew.getDisasterId(),"Disaster is already reported.",entity.getStatus()));
+                    template.convertAndSend("/queue/report"+dnew.getUserId(), new reportResponse(dnew.getDisasterId().toHexString(),"Disaster is already reported.",entity.getStatus()));
                 }
                 return true;
 
@@ -204,8 +204,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             dto.setState(entity.getState());
             dto.setAssignmentStatus(entity.getAssignmentStatus());
             dto.setSuspicious(entity.getSuspicious());
-            dto.setImage(entity.getImage());
-            dto.setDisasterId(entity.getDisasterId());
+            dto.setImage(entity.getImage().toHexString());
+            dto.setDisasterId(entity.getDisasterId().toHexString());
+            dto.setUserReport(entity.getUserReport());
             dtos.add(dto);
         }
         userEntity user = userrepo.findByUserId(userId);
@@ -262,8 +263,8 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         disaster.setStatus(Status.VERIFIED);
         DisasterRepo.save(disaster);
         stationservice.findStation(disasterId, newTrucks, newPersonnel);
-        template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId(),"Disaster is verified.",disaster.getStatus()));
-        return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been verified. Help is on the way.",disaster.getStatus()));
+        template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId().toHexString(), "Disaster is verified.",disaster.getStatus()));
+        return ResponseEntity.ok(new reportResponse(disaster.getDisasterId().toHexString(),"Disaster has been verified. Help is on the way.",disaster.getStatus()));
     }
     
     @Override
@@ -288,9 +289,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         stat.setTotalAssigned(stat.getTotalAssigned() + 1);
         admin.setStats(stat);
         userrepo.save(admin);
-        template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId(),
+        template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId().toHexString(),
         "Disaster is rejected. Kindly don't spam the management system",disaster.getStatus()));
-        return ResponseEntity.ok(new reportResponse(disasterId,"Disaster has been rejected",disaster.getStatus()));   
+        return ResponseEntity.ok(new reportResponse(disaster.getDisasterId().toHexString(), "Disaster has been rejected", disaster.getStatus()));   
     }
 
 }

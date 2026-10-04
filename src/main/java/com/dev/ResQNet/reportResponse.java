@@ -11,7 +11,7 @@ import lombok.Setter;
 @AllArgsConstructor
 public class reportResponse {
     
-    public ObjectId disasterId;
+    public String disasterId;
     public String msg;
     public Status status;
 

@@ -65,7 +65,7 @@ public class disasterServiceImpl implements disasterService{
             dto.setDisasterType(de.getDisasterType());
             dto.setForces(de.getForces());
             dto.setFinalConfidence(de.getFinalConfidence());
-            dto.setImage(de.getImage());
+            dto.setImage(de.getImage().toHexString());
             dto.setState(de.getState());
             dto.setSeverity(de.getSeverity());
             dto.setSuspicious(de.getSuspicious());

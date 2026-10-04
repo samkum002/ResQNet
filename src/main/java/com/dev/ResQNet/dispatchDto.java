@@ -4,7 +4,7 @@ import lombok.Getter;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.bson.types.ObjectId;
+// import org.bson.types.ObjectId;
 
 @Getter
 @Setter
@@ -13,7 +13,7 @@ import org.bson.types.ObjectId;
 public class dispatchDto {
     
     private Severity severity;
-    private ObjectId dispatchId;
+    private String dispatchId;
     private Forces forceType;
     private Integer assignedVehicle;
     private Integer assignedPersonnel;

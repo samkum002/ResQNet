@@ -8,6 +8,6 @@ public interface userRepo extends MongoRepository<userEntity, ObjectId> {
     
     userEntity findByUsername(String username);
     userEntity findByUserId(ObjectId userId);
-    List<ObjectId> findByStationIdAndWorkerStatus(ObjectId stationId, Admin workerStatus);
+    List<userEntity> findByStationIdAndWorkerStatus(ObjectId stationId, Admin workerStatus);
 
 }

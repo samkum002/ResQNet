@@ -67,7 +67,7 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
         disasterentity.setStatus(Status.AI_PROGRESS);
         disasterrepo.save(disasterentity);
         userEntity user = userrepo.findById(disasterentity.getUserId()).orElse(null);
-        messagingTemplate.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disasterentity.getDisasterId(),"Disaster is under AI review.",disasterentity.getStatus()));
+        messagingTemplate.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disasterentity.getDisasterId().toHexString(), "Disaster is under AI review.",disasterentity.getStatus()));
         Media m = new Media(MimeTypeUtils.parseMimeType(content),new ByteArrayResource(image_bytes));
         // System.out.println("Analyzing image for disasterId: " + disasterId);
 
@@ -155,7 +155,7 @@ public class aiAnalyzerServiceImpl implements aiAnalyzerService {
                 disasterentity.setForces(aiEntity.getForces());
                 disasterentity.setDisasterType(aiEntity.getDisasterType());
                 disasterrepo.save(disasterentity);
-                messagingTemplate.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disasterentity.getDisasterId(),"AI analysis complete.",disasterentity.getStatus()));
+                messagingTemplate.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disasterentity.getDisasterId().toHexString(), "AI analysis complete.",disasterentity.getStatus()));
 
             }
         }

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PatchMapping;
 
 
 @RestController
@@ -38,7 +39,7 @@ public class adminDashboardController {
         return adminDashboardservice.disasterList(user.getUserId());
     }
 
-    @PostMapping("/{disasterId}/approve")
+    @PatchMapping("/{disasterId}/approve")
     public ResponseEntity<?> approveDisaster(@PathVariable ObjectId disasterId,@RequestBody(required=false) disasterDto dto){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();

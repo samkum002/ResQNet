@@ -5,4 +5,5 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 
 public interface resourceRepository extends MongoRepository<resourceEntity, ObjectId> {
     
+    resourceEntity findByStationId(ObjectId stationId);
 }

@@ -112,7 +112,7 @@ public class stationServiceImpl implements stationService {
                 dispatch.setStatus(Status.VERIFIED);
                 dispatchRepository.save(dispatch);
                 dispatchDto dto = new dispatchDto();
-                dto.setDispatchId(dispatch.getDispatchId());
+                dto.setDispatchId(dispatch.getDispatchId().toHexString());
                 dto.setSeverity(dispatch.getSeverity());
                 dto.setForceType(dispatch.getForceType());
                 dto.setAssignedVehicle(dispatch.getAssignedVehicle());
@@ -133,7 +133,7 @@ public class stationServiceImpl implements stationService {
         List<dispatchDto> dispatchDtos = new ArrayList<>();
         for(dispatchEntity dispatch : dispatches){
             dispatchDto dto = new dispatchDto();
-            dto.setDispatchId(dispatch.getDispatchId());
+            dto.setDispatchId(dispatch.getDispatchId().toHexString());
             dto.setSeverity(dispatch.getSeverity());
             dto.setForceType(dispatch.getForceType());
             dto.setAssignedVehicle(dispatch.getAssignedVehicle());
@@ -160,7 +160,7 @@ public class stationServiceImpl implements stationService {
 
             backupEntity backup = backupRepo.findByDispatchId(dispatchId);
 
-            resourceEntity resource = resourceRepo.findById(dispatch.getStationId()).orElseThrow(() ->new RuntimeException("Station resource not found"));
+            resourceEntity resource = resourceRepo.findByStationId(dispatch.getStationId());
             disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
 
             stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() ->new RuntimeException("Station not found"));
@@ -181,8 +181,8 @@ public class stationServiceImpl implements stationService {
             resource.setAvailableVehicle(resource.getAvailableVehicle()- backup.getReqVehicles());
             resourceRepo.save(resource);
 
-            List<ObjectId> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
-            userEntity worker = userRepository.findById(workers.get(0)).orElseThrow(() ->new RuntimeException("user not found"));
+            List<userEntity> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
+            userEntity worker = workers.get(0);
             worker.setWorkerStatus(Admin.BUSY);
             userRepository.save(worker);
 
@@ -199,8 +199,8 @@ public class stationServiceImpl implements stationService {
             backup.setAssingnedAt(LocalDateTime.now());
             backupRepo.save(backup);
 
-            messagingTemplate.convertAndSend("/new/mission" + workers.get(0), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId(),dispatch.getForceType(),backup.getReqVehicles(),backup.getReqPersonnel(),dispatch.getStatus()));
-            messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId(),"Backup Dispatch approved.",disaster.getStatus()));
+            messagingTemplate.convertAndSend("/new/mission" + workers.get(0), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),backup.getReqVehicles(),backup.getReqPersonnel(),dispatch.getStatus()));
+            messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId().toHexString(),"Backup Dispatch approved.",disaster.getStatus()));
             return ResponseEntity.ok("Backup Dispatch approved successfully.");
         }
 
@@ -212,7 +212,7 @@ public class stationServiceImpl implements stationService {
             return ResponseEntity.badRequest().body("This mission has already been processed.");
         }
 
-        resourceEntity resource = resourceRepo.findById(dispatch.getStationId()).orElseThrow(() ->new RuntimeException("Station resource not found"));
+        resourceEntity resource = resourceRepo.findByStationId(dispatch.getStationId());
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
 
         stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() ->new RuntimeException("Station not found"));
@@ -233,8 +233,8 @@ public class stationServiceImpl implements stationService {
         resource.setAvailableVehicle(resource.getAvailableVehicle()- dispatch.getAssignedVehicle());
         resourceRepo.save(resource);
 
-        List<ObjectId> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
-        userEntity worker = userRepository.findById(workers.get(0)).orElseThrow(() ->new RuntimeException("user not found"));
+        List<userEntity> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
+        userEntity worker = workers.get(0);
         worker.setWorkerStatus(Admin.BUSY);
         userRepository.save(worker);
 
@@ -248,9 +248,9 @@ public class stationServiceImpl implements stationService {
         disaster.getStationId().add(station.getStationId());
         disasterRepository.save(disaster);
 
-        messagingTemplate.convertAndSend("/new/mission" + worker.getUserId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
-        messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
-        messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(),new reportResponse(disaster.getDisasterId(),"Dispatch approved.",disaster.getStatus()));
+        messagingTemplate.convertAndSend("/new/mission" + worker.getUserId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
+        messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId().toHexString(),"Dispatch approved.",disaster.getStatus()));
+        messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(),new reportResponse(disaster.getDisasterId().toHexString(),"Dispatch approved.",disaster.getStatus()));
         return ResponseEntity.ok("Dispatch approved successfully.");
     }
 
@@ -288,14 +288,14 @@ public class stationServiceImpl implements stationService {
                 dispatchRepository.save(dispatch);
                 
                 disasterDto dto = new disasterDto();
-                dto.setDisasterId(disaster.getDisasterId());
+                dto.setDisasterId(disaster.getDisasterId().toHexString());
                 dto.setStatus(disaster.getStatus());
                 dto.setAiStatus(disaster.getAiStatus());
                 dto.setSeverity(disaster.getSeverity());
                 dto.setAiConfidence(disaster.getAiConfidence());
                 dto.setFinalConfidence(disaster.getFinalConfidence());
                 dto.setSuspicious(disaster.getSuspicious());
-                dto.setImage(disaster.getImage());
+                dto.setImage(disaster.getImage().toHexString());
                 dto.setAssignmentStatus(disaster.getAssignmentStatus());
                 dto.setState(disaster.getState());
                 dto.setUserReport(disaster.getUserReport());
@@ -321,7 +321,7 @@ public class stationServiceImpl implements stationService {
             backupRepo.save(backup);
 
             dispatchDto dto = new dispatchDto();
-            dto.setDispatchId(dispatchId);
+            dto.setDispatchId(dispatch.getDispatchId().toHexString());
             dto.setSeverity(dispatch.getSeverity());
             dto.setForceType(dispatch.getForceType());
             dto.setAssignedVehicle(backup.getReqVehicles());
@@ -348,14 +348,14 @@ public class stationServiceImpl implements stationService {
             disaster.setStatus(Status.DISPATCH_FAILED);
             disasterRepository.save(disaster);
             disasterDto dto = new disasterDto();
-            dto.setDisasterId(disaster.getDisasterId());
+            dto.setDisasterId(disaster.getDisasterId().toHexString());
             dto.setStatus(disaster.getStatus());
             dto.setAiStatus(disaster.getAiStatus());
             dto.setSeverity(disaster.getSeverity());
             dto.setAiConfidence(disaster.getAiConfidence());
             dto.setFinalConfidence(disaster.getFinalConfidence());
             dto.setSuspicious(disaster.getSuspicious());
-            dto.setImage(disaster.getImage());
+            dto.setImage(disaster.getImage().toHexString());
             dto.setAssignmentStatus(disaster.getAssignmentStatus());
             dto.setState(disaster.getState());
             dto.setUserReport(disaster.getUserReport());
@@ -372,7 +372,7 @@ public class stationServiceImpl implements stationService {
         dispatchRepository.save(dispatch);
 
         dispatchDto dto = new dispatchDto();
-        dto.setDispatchId(dispatch.getDispatchId());
+        dto.setDispatchId(dispatch.getDispatchId().toHexString());
         dto.setSeverity(dispatch.getSeverity());
         dto.setForceType(dispatch.getForceType());
         dto.setAssignedVehicle(dispatch.getAssignedVehicle());
@@ -433,8 +433,8 @@ public class stationServiceImpl implements stationService {
                 userRepository.save(w);        
             }
 
-            messagingTemplate.convertAndSend("/new/mission" + station.getUserId(), new reportResponse(disaster.getDisasterId(), "Backup Mission completed.", disaster.getStatus()));
-            messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Backup Mission completed.", disaster.getStatus()));
+            messagingTemplate.convertAndSend("/new/mission" + station.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Backup Mission completed.", disaster.getStatus()));
+            messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Backup Mission completed.", disaster.getStatus()));
             return ResponseEntity.ok("Backup Dispatch completed successfully.");
         }
 
@@ -485,9 +485,9 @@ public class stationServiceImpl implements stationService {
         worker.setStats(stats);
         userRepository.save(worker);        
         
-        messagingTemplate.convertAndSend("/new/mission" + station.getUserId(), new reportResponse(disaster.getDisasterId(), "Mission completed.", disaster.getStatus()));
-        messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Mission completed.", disaster.getStatus()));
-        messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId(), "Mission completed.", disaster.getStatus()));
+        messagingTemplate.convertAndSend("/new/mission" + station.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
+        messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
+        messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
         return ResponseEntity.ok("Dispatch completed successfully.");
     }
 
@@ -546,8 +546,8 @@ public class stationServiceImpl implements stationService {
         worker.setStats(stats);
         userRepository.save(worker);        
         
-        messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId(), "Mission marked as fake.", disaster.getStatus()));
-        messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId(), "Mission marked as fake. Please do not spam this platform.", disaster.getStatus()));
+        messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission marked as fake.", disaster.getStatus()));
+        messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission marked as fake. Please do not spam this platform.", disaster.getStatus()));
         
         return ResponseEntity.ok("Dispatch marked as fake successfully.");
     }
@@ -595,7 +595,7 @@ public class stationServiceImpl implements stationService {
         disasterRepository.save(disaster);
         
         dispatchDto dtoo = new dispatchDto();
-        dtoo.setDispatchId(dispatchId);
+        dtoo.setDispatchId(dispatchId.toHexString());
         dtoo.setSeverity(dispatch.getSeverity());
         dtoo.setForceType(backup.getForce());
         dtoo.setAssignedVehicle(dto.getReqVehicles());

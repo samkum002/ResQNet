@@ -91,9 +91,9 @@ public class disasterController {
             aiAnalyzerservice.aiAnalyzer(image_bytes,disasterId,content);
             disaster.setAiStatus(AI.PROCESSING);
             disasterrepo.save(disaster);
-            template.convertAndSendToUser(name, "/queue/report", new reportResponse(disaster.getDisasterId(),"AI analysis",disaster.getStatus()));
+            template.convertAndSendToUser(name, "/queue/report", new reportResponse(disaster.getDisasterId().toHexString(), "AI analysis",disaster.getStatus()));
         }
-        template.convertAndSendToUser(name, "/queue/report", new reportResponse(disaster.getDisasterId(),"Reported Successfully",disaster.getStatus()));
-        return ResponseEntity.ok(new reportResponse(disaster.getDisasterId(),"Reported Successfully",disaster.getStatus()));
+        template.convertAndSendToUser(name, "/queue/report", new reportResponse(disaster.getDisasterId().toHexString(), "Reported Successfully",disaster.getStatus()));
+        return ResponseEntity.ok(new reportResponse(disaster.getDisasterId().toHexString(), "Reported Successfully",disaster.getStatus()));
     }
 }

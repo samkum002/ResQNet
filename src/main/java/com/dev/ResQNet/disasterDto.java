@@ -24,10 +24,10 @@ public class disasterDto {
     private String userReport;
     private Integer reportCount;
     private Assignment assignmentStatus;
-    private Set<Disaster> disasterType = new HashSet<>();
-    private Set<Forces> forces = new HashSet<>();
-    private ObjectId image;
-    private ObjectId disasterId;
+    private Set<Disaster> disasterType;
+    private Set<Forces> forces;
+    private String image;
+    private String disasterId;
     // private Stats stats;
     
 }
