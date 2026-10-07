@@ -33,7 +33,7 @@ public class ReverseGeocodingService {
                 .map(json -> json
                         .path("address")
                         .path("state")
-                        .asText())
+                        .asString())
                 .block();
 
         disaster.setState(state);

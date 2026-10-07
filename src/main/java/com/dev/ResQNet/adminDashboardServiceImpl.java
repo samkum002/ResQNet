@@ -151,8 +151,10 @@ public class adminDashboardServiceImpl implements adminDashboardService{
 
     @Override
     public boolean checkDuplicateDisasters(double latitude,double longitude,String state,ObjectId disasterId){
+        LocalDateTime ctf = LocalDateTime.now().minusHours(24);
         Query query = new Query();
         query.addCriteria(Criteria.where("state").is(state));
+        query.addCriteria(Criteria.where("createdAt").gte(ctf));
         query.addCriteria(Criteria.where("status").in(Status.UNDER_REVIEW,Status.AI_PROGRESS,Status.BACKUP_DISPATCHED,Status.DISPATCHED,Status.REPORTED,Status.VERIFIED,Status.COMPLETED));
         query.addCriteria(Criteria.where("location").nearSphere(new GeoJsonPoint(longitude, latitude)).maxDistance(500.0/6378137.0));
         List<disasterEntity> disasters = mongoTemplate.find(query,disasterEntity.class);
@@ -176,9 +178,9 @@ public class adminDashboardServiceImpl implements adminDashboardService{
                 dto.setFinalConfidence(entity.getFinalConfidence());
                 template.convertAndSend("/topic/disaster/"+dnew.getAssignedAdminId(),dto);
                 if(entity.getStatus()==Status.COMPLETED){
-                    template.convertAndSend("/queue/report"+dnew.getUserId(), new reportResponse(dnew.getDisasterId().toHexString(),"Disaster is already reported and completed.",entity.getStatus()));
+                    template.convertAndSend("/queue/report/"+dnew.getUserId(), new reportResponse(dnew.getDisasterId().toHexString(),"Disaster is already reported and completed.",entity.getStatus()));
                 }else{
-                    template.convertAndSend("/queue/report"+dnew.getUserId(), new reportResponse(dnew.getDisasterId().toHexString(),"Disaster is already reported.",entity.getStatus()));
+                    template.convertAndSend("/queue/report/"+dnew.getUserId(), new reportResponse(dnew.getDisasterId().toHexString(),"Disaster is already reported.",entity.getStatus()));
                 }
                 return true;
 

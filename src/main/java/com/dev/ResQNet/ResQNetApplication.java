@@ -1,6 +1,7 @@
 package com.dev.ResQNet;
 
 import org.springframework.boot.SpringApplication;
+import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -10,6 +11,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 @EnableScheduling
+@EnableCaching
 @EnableTransactionManagement
 @SpringBootApplication(exclude = SecurityAutoConfiguration.class)
 public class ResQNetApplication {

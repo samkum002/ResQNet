@@ -118,7 +118,7 @@ public class stationServiceImpl implements stationService {
                 dto.setAssignedVehicle(dispatch.getAssignedVehicle());
                 dto.setAssignedPersonnel(dispatch.getAssignedPersonnel());
                 dto.setStatus(dispatch.getStatus());
-                messagingTemplate.convertAndSend("/update/mission" + station.getUserId(), dto);
+                messagingTemplate.convertAndSend("/update/mission/" + station.getUserId(), dto);
                 newTrucks -= requiredTrucks;
                 newPersonnel -= requiredPersonnel;
             }
@@ -199,8 +199,8 @@ public class stationServiceImpl implements stationService {
             backup.setAssingnedAt(LocalDateTime.now());
             backupRepo.save(backup);
 
-            messagingTemplate.convertAndSend("/new/mission" + worker.getUserId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),backup.getReqVehicles(),backup.getReqPersonnel(),dispatch.getStatus()));
-            messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId().toHexString(),"Backup Dispatch approved.",disaster.getStatus()));
+            messagingTemplate.convertAndSend("/new/mission/" + worker.getUserId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),backup.getReqVehicles(),backup.getReqPersonnel(),dispatch.getStatus()));
+            messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId().toHexString(),"Backup Dispatch approved.",disaster.getStatus()));
             return ResponseEntity.ok("Backup Dispatch approved successfully.");
         }
 
@@ -248,9 +248,9 @@ public class stationServiceImpl implements stationService {
         disaster.getStationId().add(station.getStationId());
         disasterRepository.save(disaster);
 
-        messagingTemplate.convertAndSend("/new/mission" + worker.getUserId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
-        messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId().toHexString(),"Dispatch approved.",disaster.getStatus()));
-        messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(),new reportResponse(disaster.getDisasterId().toHexString(),"Dispatch approved.",disaster.getStatus()));
+        messagingTemplate.convertAndSend("/new/mission/" + worker.getUserId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
+        messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId().toHexString(),"Dispatch approved.",disaster.getStatus()));
+        messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(),new reportResponse(disaster.getDisasterId().toHexString(),"Dispatch approved.",disaster.getStatus()));
         return ResponseEntity.ok("Dispatch approved successfully.");
     }
 
@@ -302,7 +302,7 @@ public class stationServiceImpl implements stationService {
                 dto.setReportCount(disaster.getReportCount());
                 dto.setDisasterType(disaster.getDisasterType());
                 dto.setForces(Collections.singleton(force)); // this is the only force that failed to find a station so we set it in the dto by creating a singleton set
-                messagingTemplate.convertAndSend("/queue/report" + disaster.getAssignedAdminId(),dto);
+                messagingTemplate.convertAndSend("/queue/report/" + disaster.getAssignedAdminId(),dto);
                 return;
             }
 
@@ -327,7 +327,7 @@ public class stationServiceImpl implements stationService {
             dto.setAssignedVehicle(backup.getReqVehicles());
             dto.setAssignedPersonnel(backup.getReqPersonnel());
             dto.setStatus(dispatch.getStatus());
-            messagingTemplate.convertAndSend("/update/mission" + station.getUserId(), dto);
+            messagingTemplate.convertAndSend("/update/mission/" + station.getUserId(), dto);
             return;
         }
 
@@ -362,7 +362,7 @@ public class stationServiceImpl implements stationService {
             dto.setReportCount(disaster.getReportCount());
             dto.setDisasterType(disaster.getDisasterType());
             dto.setForces(Collections.singleton(force)); // this is the only force that failed to find a station so we set it in the dto by creating a singleton set
-            messagingTemplate.convertAndSend("/queue/report" + disaster.getAssignedAdminId(),dto);
+            messagingTemplate.convertAndSend("/queue/report/" + disaster.getAssignedAdminId(),dto);
             return;
         }
 
@@ -378,7 +378,7 @@ public class stationServiceImpl implements stationService {
         dto.setAssignedVehicle(dispatch.getAssignedVehicle());
         dto.setAssignedPersonnel(dispatch.getAssignedPersonnel());
         dto.setStatus(dispatch.getStatus());
-        messagingTemplate.convertAndSend("/update/mission" + station.getUserId(), dto);        
+        messagingTemplate.convertAndSend("/update/mission/" + station.getUserId(), dto);        
     }
 
     @Override 
@@ -626,8 +626,8 @@ public class stationServiceImpl implements stationService {
             user.setTrustScore(user.getTrustScore() + 10);
             userRepository.save(user);
 
-            messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
-            messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
+            messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
+            messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
 
         }
 
@@ -659,8 +659,8 @@ public class stationServiceImpl implements stationService {
             user.setTrustScore(user.getTrustScore() + 10);
             userRepository.save(user);
 
-            messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Backup Mission completed.", disaster.getStatus()));
-            messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
+            messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Backup Mission completed.", disaster.getStatus()));
+            messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
 
         }
         
@@ -691,8 +691,8 @@ public class stationServiceImpl implements stationService {
             user.setTrustScore(Math.max(0, user.getTrustScore() - 20));
             userRepository.save(user);
 
-            messagingTemplate.convertAndSend("/topic/disaster" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission marked as fake.", disaster.getStatus()));
-            messagingTemplate.convertAndSend("/queue/report" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission marked as fake. Please do not spam this platform.", disaster.getStatus()));
+            messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission marked as fake.", disaster.getStatus()));
+            messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission marked as fake. Please do not spam this platform.", disaster.getStatus()));
 
         }
     }
