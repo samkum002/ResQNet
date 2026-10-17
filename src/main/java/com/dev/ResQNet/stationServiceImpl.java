@@ -238,12 +238,12 @@ public class stationServiceImpl implements stationService {
         worker.setWorkerStatus(Admin.BUSY);
         userRepository.save(worker);
 
-        dispatch.setStatus(Status.DISPATCHED);
+        dispatch.setStatus(Status.DISPATCH_ASSIGNED);
         dispatch.setWorkerId(worker.getUserId());
         dispatch.setDispatchedAt(LocalDateTime.now());
         dispatchRepository.save(dispatch);
 
-        disaster.setStatus(Status.DISPATCHED);
+        disaster.setStatus(Status.DISPATCH_ASSIGNED);
         disaster.setDispatchedAt(dispatch.getDispatchedAt());
         disaster.getStationId().add(station.getStationId());
         disasterRepository.save(disaster);
@@ -252,7 +252,7 @@ public class stationServiceImpl implements stationService {
         messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId().toHexString(),"Dispatch approved.",disaster.getStatus()));
         messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(),new reportResponse(disaster.getDisasterId().toHexString(),"Dispatch approved.",disaster.getStatus()));
         return ResponseEntity.ok("Dispatch approved successfully.");
-    }
+    } 
 
     @Override
     @Async
@@ -573,7 +573,7 @@ public class stationServiceImpl implements stationService {
     public ResponseEntity<dispatches> getAssignedDispatches(String username) {
         
         userEntity worker = userRepository.findByUsername(username);
-        List<dispatchEntity> dispatchEntities = dispatchRepository.findByWorkerIdAndStatus(worker.getUserId(),Status.DISPATCHED);
+        List<dispatchEntity> dispatchEntities = dispatchRepository.findByWorkerIdAndStatus(worker.getUserId(),Status.DISPATCH_ASSIGNED);
         List<backupEntity> backupEntities = backupRepo.findByWorkerIdAndStatus(worker.getUserId(),backupStatus.ASSIGNED);
         List<dispatchDto> dispatchDtos = new ArrayList<>();
         for (dispatchEntity dispatch : dispatchEntities) {
