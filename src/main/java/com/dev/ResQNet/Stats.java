@@ -11,9 +11,9 @@ import lombok.Setter;
 @NoArgsConstructor 
 public class Stats {
 
-    private Integer totalAssigned = 0;
-    private Integer completed = 0;
-    private Integer markedFalse = 0;
-    private Integer falseReports = 0; // as total rejected for station dashboard
+    private Integer totalAssigned;
+    private Integer completed ;
+    private Integer markedFalse;
+    private Integer falseReports; // as total rejected for station dashboard
 
 }
