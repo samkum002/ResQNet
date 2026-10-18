@@ -15,6 +15,8 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.dev.ResQNet.Status.DISPATCH_COMPLETED;
+
 
 @Service
 public class stationServiceImpl implements stationService {
@@ -39,6 +41,65 @@ public class stationServiceImpl implements stationService {
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
+
+    @Override
+    public ResponseEntity<?> completeDispatch(ObjectId dispatchId, String username){
+
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
+        userEntity worker = userRepository.findByUsername(username);
+
+        if(dispatch.getStatus() == Status.BACKUP_DISPATCHED){
+
+            backupEntity backup = backupRepo.findByDispatchId(dispatchId);
+
+            if (!dispatch.getStationId().equals(worker.getStationId())){
+                return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
+            }
+            if (dispatch.getStatus() != Status.BACKUP_DISPATCHED) {
+                return ResponseEntity.badRequest().body("This mission is not in a state that can be completed.");
+            }
+
+            dispatch.setStatus(Status.BACKUP_DISPATCH_COMPLETED);
+            dispatchRepository.save(dispatch);
+
+            backup.setStatus(backupStatus.BACKUP_DISPATCH_COMPLETED);
+            backupRepo.save(backup);
+
+            return ResponseEntity.ok("Backup Dispatch completed successfully.");
+        }
+
+        if (!dispatch.getStationId().equals(worker.getStationId())){
+            return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
+        }
+        if (dispatch.getStatus() != Status.DISPATCHED) {
+            return ResponseEntity.badRequest().body("This mission is not in a state that can be completed.");
+        }
+       
+
+        dispatch.setStatus(Status.DISPATCH_COMPLETED);
+        dispatchRepository.save(dispatch);
+
+        return ResponseEntity.ok("Dispatch completed successfully.");
+    }
+
+    @Override
+    public ResponseEntity<?> falseDispatch(ObjectId dispatchId, String username){
+
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
+        userEntity worker = userRepository.findByUsername(username);
+
+        if (!dispatch.getStationId().equals(worker.getStationId())){
+            return ResponseEntity.status(403).body("You are not authorized to mark this mission as fake.");
+        }
+        if (dispatch.getStatus() != Status.DISPATCHED) {
+            return ResponseEntity.badRequest().body("This mission is not in a state that can be marked as fake.");
+        }
+
+        dispatch.setStatus(Status.DISPATCH_FALSE);
+        dispatchRepository.save(dispatch);
+
+        return ResponseEntity.ok("Dispatch marked as fake successfully.");
+    }
 
     private double calculateDistance(GeoJsonPoint p1, GeoJsonPoint p2) {
         double lat1 = p1.getY();
@@ -182,6 +243,9 @@ public class stationServiceImpl implements stationService {
             resourceRepo.save(resource);
 
             List<userEntity> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
+            if(workers.isEmpty()){
+                return ResponseEntity.badRequest().body("No available workers at this station.");
+            }
             userEntity worker = workers.get(0);
             worker.setWorkerStatus(Admin.BUSY);
             userRepository.save(worker);
@@ -234,6 +298,9 @@ public class stationServiceImpl implements stationService {
         resourceRepo.save(resource);
 
         List<userEntity> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
+        if(workers.isEmpty()){
+            return ResponseEntity.badRequest().body("No available workers at this station.");
+        }
         userEntity worker = workers.get(0);
         worker.setWorkerStatus(Admin.BUSY);
         userRepository.save(worker);
@@ -390,7 +457,7 @@ public class stationServiceImpl implements stationService {
         stationEntity station = stationRepository.findByUserId(worker.getUserId());
         resourceEntity resource = resourceRepo.findByStationId(station.getStationId());
 
-        if(dispatch.getStatus() == Status.BACKUP_DISPATCHED){
+        if(dispatch.getStatus() == Status.BACKUP_DISPATCH_COMPLETED){
 
             backupEntity backup = backupRepo.findByDispatchId(dispatchId);            
 
@@ -437,7 +504,7 @@ public class stationServiceImpl implements stationService {
         if (!dispatch.getStationId().equals(worker.getStationId())){
             return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
         }
-        if (dispatch.getStatus() != Status.DISPATCHED) {
+        if (dispatch.getStatus() != Status.DISPATCH_COMPLETED) {
             return ResponseEntity.badRequest().body("This mission is not in a state that can be completed.");
         }
         resource.setAvailablePersonnel(resource.getAvailablePersonnel() + dispatch.getAssignedPersonnel());
@@ -481,7 +548,7 @@ public class stationServiceImpl implements stationService {
         if (!dispatch.getStationId().equals(worker.getStationId())){
             return ResponseEntity.status(403).body("You are not authorized to mark this mission as fake.");
         }
-        if (dispatch.getStatus() != Status.DISPATCHED) {
+        if (dispatch.getStatus() != Status.DISPATCH_FALSE) {
             return ResponseEntity.badRequest().body("This mission is not in a state that can be marked as fake.");
         }
 
@@ -603,8 +670,8 @@ public class stationServiceImpl implements stationService {
     @Override
     public void completeDisasterNormal(ObjectId disasterId){
 
-        List<dispatchEntity> dispatches = dispatchRepository.findByDisasterIdAndStatus(disasterId, Status.DISPATCHED);
-        List<backupEntity> backups = backupRepo.findByDisasterIdAndStatus(disasterId, backupStatus.DISPATCHED);
+        List<dispatchEntity> dispatches = dispatchRepository.findByDisasterIdAndStatus(disasterId, Status.DISPATCH_COMPLETED);
+        List<backupEntity> backups = backupRepo.findByDisasterIdAndStatus(disasterId, backupStatus.BACKUP_DISPATCH_COMPLETED);
 
         if(dispatches.isEmpty() && backups.isEmpty()){
             
@@ -636,8 +703,8 @@ public class stationServiceImpl implements stationService {
     @Override
     public void completeDisasterBackup(ObjectId disasterId){
 
-        List<dispatchEntity> dispatches = dispatchRepository.findByDisasterIdAndStatus(disasterId, Status.BACKUP_DISPATCHED);
-        List<backupEntity> backups = backupRepo.findByDisasterIdAndStatus(disasterId, backupStatus.DISPATCHED);
+        List<dispatchEntity> dispatches = dispatchRepository.findByDisasterIdAndStatus(disasterId, Status.BACKUP_DISPATCH_COMPLETED);
+        List<backupEntity> backups = backupRepo.findByDisasterIdAndStatus(disasterId, backupStatus.BACKUP_DISPATCH_COMPLETED);
 
         if(dispatches.isEmpty()&&backups.isEmpty()){
             
