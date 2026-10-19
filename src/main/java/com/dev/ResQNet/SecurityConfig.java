@@ -30,6 +30,7 @@ public class SecurityConfig {
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 .requestMatchers("/station/**").hasRole("STATION_MANAGER")
                 .requestMatchers("/dispatch/**").hasRole("WORKER")
+                .requestMatchers("/user/me").authenticated()
                 .anyRequest().permitAll()
             )
 

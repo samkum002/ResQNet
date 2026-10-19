@@ -49,12 +49,22 @@ public class backupController {
 
     }
 
-    @PatchMapping("/complete/{dispatchId}")
+    @PatchMapping("/false/{dispatchId}")
     public ResponseEntity<?> falseDispatchMission(@PathVariable ObjectId dispatchId) {
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
         return service.falseDispatch(dispatchId, name);
 
+    }
+
+    @PostMapping("/start/{dispatchId}")
+    public ResponseEntity<?> startDispatch(
+            @PathVariable ObjectId dispatchId) {
+
+        Authentication auth =
+                SecurityContextHolder.getContext().getAuthentication();
+
+        return service.startDispatch(dispatchId, auth.getName());
     }
 }

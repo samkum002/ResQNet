@@ -17,4 +17,5 @@ public interface stationService {
     public void completeDisasterBackup(ObjectId disasterId);
     ResponseEntity<?> completeDispatch(ObjectId dispatchId, String username);
     ResponseEntity<?> falseDispatch(ObjectId dispatchId, String username);
+    ResponseEntity<?> startDispatch(ObjectId dispatchId, String username);
 }

@@ -46,33 +46,42 @@ public class stationController {
         return stationservice.approveMisssion(dispatchId,username);
     }
 
+    
     @GetMapping("/{dispatchId}/reject")
-    public ResponseEntity<?> rejectDispatch(@PathVariable ObjectId dispatchId){
+    public ResponseEntity<?> rejectDispatch(@PathVariable ObjectId dispatchId) {
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
 
         userEntity manager = userRepository.findByUsername(username);
+
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId)
+                .orElseThrow(() -> new RuntimeException("Dispatch not found"));
+
+        if (!dispatch.getStationId().equals(manager.getStationId())) {
+            return ResponseEntity.status(403)
+                    .body("You are not authorized to reject this dispatch.");
+        }
+
         Stats stats = manager.getStats();
         stats.setFalseReports(stats.getFalseReports() + 1);
         stats.setTotalAssigned(stats.getTotalAssigned() + 1);
         manager.setStats(stats);
-        userRepository.save(manager);        
+        userRepository.save(manager);
 
-        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
+        stationEntity station = stationRepository.findById(dispatch.getStationId())
+                .orElseThrow(() -> new RuntimeException("Station not found"));
 
-        if (!dispatch.getStationId().equals(userRepository.findByUsername(username).getStationId())) {
-            return ResponseEntity.status(403).body("You are not authorized to reject this dispatch.");
-        }
-        stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() -> new RuntimeException("Station not found"));
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
         disaster.getRejectedStations().add(station.getStationId());
         disasterRepository.save(disaster);
+
         Forces force = station.getForceType();
-        stationservice.newMission(dispatchId,force);
+        stationservice.newMission(dispatchId, force);
 
         return ResponseEntity.ok("Dispatch rejected successfully.");
     }
+
 
     @GetMapping("/{dispatchId}/complete")
     public ResponseEntity<?> completeDispatch(@PathVariable ObjectId dispatchId){

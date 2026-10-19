@@ -10,13 +10,13 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.mapping.Document;
-import lombok.NoArgsConstructor;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Document(collection="backup")
 public class backupEntity {
+
+    public backupEntity() {}
     
     @Id 
     private ObjectId backupId;

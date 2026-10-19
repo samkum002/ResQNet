@@ -9,14 +9,14 @@ import org.springframework.data.mongodb.core.index.GeoSpatialIndexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@NoArgsConstructor
 @Document(collection="stations")
 public class stationEntity {
+
+    public stationEntity() {}
     
     @Id
     private ObjectId stationId;

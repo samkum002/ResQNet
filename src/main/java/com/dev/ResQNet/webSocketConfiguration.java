@@ -27,11 +27,13 @@ public class webSocketConfiguration implements WebSocketMessageBrokerConfigurer{
         config.enableSimpleBroker("/queue");
         config.enableSimpleBroker("/update");
         config.enableSimpleBroker("/new");
+        config.setUserDestinationPrefix("/user");
     }
 
 	@Bean
 	public AuthorizationManager<Message<?>> messageAuthorizationManager(MessageMatcherDelegatingAuthorizationManager.Builder messages) {
 		messages
+            .simpSubscribeDestMatchers("/user/queue/**").hasRole("USER")
 			.simpSubscribeDestMatchers("/topic/**").hasRole("ADMIN")
             .simpSubscribeDestMatchers("/queue/**").hasRole("USER")
             .simpSubscribeDestMatchers("/update/**").hasRole("STATION_MANAGER")

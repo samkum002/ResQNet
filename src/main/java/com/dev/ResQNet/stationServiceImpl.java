@@ -24,6 +24,9 @@ public class stationServiceImpl implements stationService {
     @Autowired
     private stationRepo stationRepository;
 
+    @Autowired
+    private DispatchSimulationService simulationService;
+
     @Autowired 
     private backupRepository backupRepo;
 
@@ -41,6 +44,95 @@ public class stationServiceImpl implements stationService {
 
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
+
+    @Override
+    public ResponseEntity<?> startDispatch(ObjectId dispatchId,String username) {
+
+        userEntity worker = userRepository.findByUsername(username);
+
+        if (worker == null) {
+            return ResponseEntity.status(404).body("Worker not found.");
+        }
+
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElse(null);
+
+        if (dispatch == null) {
+            return ResponseEntity.status(404).body("Dispatch not found.");
+        }
+
+        if (dispatch.getWorkerId() == null || !dispatch.getWorkerId().equals(worker.getUserId())) {
+            return ResponseEntity.status(403).body("This dispatch is not assigned to you.");
+        }
+
+        boolean backup = dispatch.getStatus() == Status.BACKUP_ASSIGNED;
+        boolean normal = dispatch.getStatus() == Status.DISPATCH_ASSIGNED;
+
+        if (!backup && !normal) {
+            return ResponseEntity.badRequest().body("Dispatch is not in an assigned state.");
+        }
+
+        backupEntity backupRecord = null;
+
+        if (backup) {
+            backupRecord = backupRepo.findByDispatchId(dispatchId);
+
+            if (backupRecord == null) {
+                return ResponseEntity.status(404).body("Associated backup record not found.");
+            }
+        }
+
+        List<List<Double>> routePoints;
+
+        try {
+            routePoints = simulationService.calculateRoute(dispatchId);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(ex.getMessage());
+        } catch (Exception ex) {
+            return ResponseEntity.status(502).body("Could not calculate a route. Please retry.");
+        }
+
+        Status previousStatus = dispatch.getStatus();
+        LocalDateTime previousDispatchedAt = dispatch.getDispatchedAt();
+        backupStatus previousBackupStatus = backupRecord == null ? null : backupRecord.getStatus();
+
+        try {
+            dispatch.setStatus(backup ? Status.BACKUP_DISPATCHED : Status.DISPATCHED);
+
+            if (!backup) {
+                dispatch.setDispatchedAt(LocalDateTime.now());
+            }
+
+            dispatchRepository.save(dispatch);
+
+            if (backupRecord != null) {
+                backupRecord.setStatus(backupStatus.DISPATCHED);
+                backupRepo.save(backupRecord);
+            }
+
+            simulationService.start(dispatchId, routePoints);
+
+            return ResponseEntity.ok("Dispatch simulation started.");
+
+        } catch (Exception ex) {
+            dispatchEntity latestDispatch = dispatchRepository.findById(dispatchId).orElse(null);
+            boolean anotherStartSucceeded = latestDispatch != null
+                    && latestDispatch.getArrivedAt() != null
+                    || simulationService.isStartingOrRunning(dispatchId);
+
+            if (!anotherStartSucceeded) {
+                dispatch.setStatus(previousStatus);
+                dispatch.setDispatchedAt(previousDispatchedAt);
+                dispatchRepository.save(dispatch);
+
+                if (backupRecord != null) {
+                    backupRecord.setStatus(previousBackupStatus);
+                    backupRepo.save(backupRecord);
+                }
+            }
+
+            return ResponseEntity.internalServerError().body("Could not start dispatch simulation.");
+        }
+    }
 
     @Override
     public ResponseEntity<?> completeDispatch(ObjectId dispatchId, String username){
@@ -261,6 +353,7 @@ public class stationServiceImpl implements stationService {
             backup.setStatus(backupStatus.ASSIGNED);
             backup.setStationId(station.getStationId());
             backup.setAssingnedAt(LocalDateTime.now());
+            backup.setWorkerId(worker.getUserId());
             backupRepo.save(backup);
 
             messagingTemplate.convertAndSend("/new/mission/" + worker.getUserId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),backup.getReqVehicles(),backup.getReqPersonnel(),dispatch.getStatus()));
