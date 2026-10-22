@@ -90,7 +90,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         dto.setSeverity(entity.getSeverity());
         dto.setSuspicious(entity.getSuspicious());
         dto.setReportCount(entity.getReportCount()); 
-        template.convertAndSend("/topic/Disaster/"+adminId, dto);
+        template.convertAndSend("/topic/disaster/"+adminId, dto);
 
     }
 
@@ -130,7 +130,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
                     entity.setAssignedAt(LocalDateTime.now());
                     DisasterRepo.save(entity);
                     dto.setAssignmentStatus(entity.getAssignmentStatus());
-                    template.convertAndSend("/topic/Disaster/"+admin.getUserId(), dto);
+                    template.convertAndSend("/topic/disaster/"+admin.getUserId(), dto);
                 }
             }
         }
@@ -177,11 +177,14 @@ public class adminDashboardServiceImpl implements adminDashboardService{
                 dto.setReportCount(entity.getReportCount());
                 dto.setFinalConfidence(entity.getFinalConfidence());
                 template.convertAndSend("/topic/disaster/"+dnew.getAssignedAdminId(),dto);
-                if(entity.getStatus()==Status.COMPLETED){
-                    template.convertAndSend("/queue/report/"+dnew.getUserId(), new reportResponse(dnew.getDisasterId().toHexString(),"Disaster is already reported and completed.",entity.getStatus()));
-                }else{
-                    template.convertAndSend("/queue/report/"+dnew.getUserId(), new reportResponse(dnew.getDisasterId().toHexString(),"Disaster is already reported.",entity.getStatus()));
+                userEntity duplicateReporter = userrepo.findByUserId(dnew.getUserId());
+                reportResponse dupMsg = entity.getStatus() == Status.COMPLETED
+                        ? new reportResponse(dnew.getDisasterId().toHexString(), "Disaster is already reported and completed.", entity.getStatus())
+                        : new reportResponse(dnew.getDisasterId().toHexString(), "Disaster is already reported.", entity.getStatus());
+                if (duplicateReporter != null && duplicateReporter.getUsername() != null) {
+                    template.convertAndSendToUser(duplicateReporter.getUsername(), "/queue/report", dupMsg);
                 }
+                template.convertAndSend("/queue/report/" + dnew.getUserId(), dupMsg);
                 return true;
 
             }
@@ -285,7 +288,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         user.setTrustScore(Math.max(0,user.getTrustScore()-20));
         userrepo.save(user);
         userEntity admin = userrepo.findByUserId(disaster.getAssignedAdminId());
-        admin.setActiveIncidents(user.getActiveIncidents()-1);
+        admin.setActiveIncidents(admin.getActiveIncidents()-1);
         Stats stat = admin.getStats();
         stat.setFalseReports(stat.getFalseReports() + 1);
         stat.setTotalAssigned(stat.getTotalAssigned() + 1);

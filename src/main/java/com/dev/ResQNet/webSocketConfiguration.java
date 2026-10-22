@@ -14,31 +14,29 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 @Configuration
 @EnableWebSocketMessageBroker
 @EnableWebSocketSecurity 
-public class webSocketConfiguration implements WebSocketMessageBrokerConfigurer{
+public class webSocketConfiguration implements WebSocketMessageBrokerConfigurer {
     
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/resqnet");
+        registry.addEndpoint("/resqnet").setAllowedOriginPatterns("*");
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-		config.enableSimpleBroker("/topic");
-        config.enableSimpleBroker("/queue");
-        config.enableSimpleBroker("/update");
-        config.enableSimpleBroker("/new");
+        config.enableSimpleBroker("/topic", "/queue", "/update", "/new");
         config.setUserDestinationPrefix("/user");
     }
 
-	@Bean
-	public AuthorizationManager<Message<?>> messageAuthorizationManager(MessageMatcherDelegatingAuthorizationManager.Builder messages) {
-		messages
+    @Bean
+    public AuthorizationManager<Message<?>> messageAuthorizationManager(MessageMatcherDelegatingAuthorizationManager.Builder messages) {
+        messages
             .simpSubscribeDestMatchers("/user/queue/**").hasRole("USER")
-			.simpSubscribeDestMatchers("/topic/**").hasRole("ADMIN")
+            .simpSubscribeDestMatchers("/topic/**").hasRole("ADMIN")
             .simpSubscribeDestMatchers("/queue/**").hasRole("USER")
             .simpSubscribeDestMatchers("/update/**").hasRole("STATION_MANAGER")
-            .simpSubscribeDestMatchers("/new/**").hasRole("WORKER");
-		return messages.build();
-	}
+            .simpSubscribeDestMatchers("/new/**").hasRole("WORKER")
+            .anyMessage().permitAll();
+        return messages.build();
+    }
 
 }

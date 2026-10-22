@@ -1,17 +1,15 @@
 package com.dev.ResQNet;
 
-import java.util.List;
-
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/station")
@@ -39,21 +37,23 @@ public class stationController {
         return stationservice.getMissionsForStation(username);
     }
 
-    @GetMapping("/{dispatchId}/approve")
+    @RequestMapping(value = "/{dispatchId}/approve", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PATCH})
     public ResponseEntity<?> approveDispatch(@PathVariable ObjectId dispatchId){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
         return stationservice.approveMisssion(dispatchId,username);
     }
 
-    
-    @GetMapping("/{dispatchId}/reject")
+    @RequestMapping(value = "/{dispatchId}/reject", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PATCH})
     public ResponseEntity<?> rejectDispatch(@PathVariable ObjectId dispatchId) {
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
 
         userEntity manager = userRepository.findByUsername(username);
+        if (manager == null) {
+            return ResponseEntity.status(404).body("Manager not found.");
+        }
 
         dispatchEntity dispatch = dispatchRepository.findById(dispatchId)
                 .orElseThrow(() -> new RuntimeException("Dispatch not found"));
@@ -64,6 +64,9 @@ public class stationController {
         }
 
         Stats stats = manager.getStats();
+        if (stats == null) {
+            stats = new Stats(0, 0, 0, 0);
+        }
         stats.setFalseReports(stats.getFalseReports() + 1);
         stats.setTotalAssigned(stats.getTotalAssigned() + 1);
         manager.setStats(stats);
@@ -73,8 +76,10 @@ public class stationController {
                 .orElseThrow(() -> new RuntimeException("Station not found"));
 
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
-        disaster.getRejectedStations().add(station.getStationId());
-        disasterRepository.save(disaster);
+        if (disaster != null) {
+            disaster.getRejectedStations().add(station.getStationId());
+            disasterRepository.save(disaster);
+        }
 
         Forces force = station.getForceType();
         stationservice.newMission(dispatchId, force);
@@ -82,15 +87,14 @@ public class stationController {
         return ResponseEntity.ok("Dispatch rejected successfully.");
     }
 
-
-    @GetMapping("/{dispatchId}/complete")
+    @RequestMapping(value = "/{dispatchId}/complete", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PATCH})
     public ResponseEntity<?> completeDispatch(@PathVariable ObjectId dispatchId){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();
         return stationservice.completeMission(dispatchId,username);
     }
 
-    @GetMapping("/{dispatchId}/fake")
+    @RequestMapping(value = "/{dispatchId}/fake", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PATCH})
     public ResponseEntity<?> fakeDispatch(@PathVariable ObjectId dispatchId){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String username = auth.getName();

@@ -2,6 +2,7 @@ package com.dev.ResQNet;
 
 import org.bson.types.ObjectId;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import lombok.Getter;
@@ -21,4 +22,6 @@ public class resourceEntity {
     public Integer availableVehicle;
     public Integer totalPersonnel;
     public Integer totalVehicle;
+    @Version
+    private Long version;
 }

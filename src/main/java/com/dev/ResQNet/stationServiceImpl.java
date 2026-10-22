@@ -15,8 +15,6 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import static com.dev.ResQNet.Status.DISPATCH_COMPLETED;
-
 
 @Service
 public class stationServiceImpl implements stationService {
@@ -410,7 +408,12 @@ public class stationServiceImpl implements stationService {
 
         messagingTemplate.convertAndSend("/new/mission/" + worker.getUserId(), new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
         messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(),new reportResponse(disaster.getDisasterId().toHexString(),"Dispatch approved.",disaster.getStatus()));
-        messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(),new reportResponse(disaster.getDisasterId().toHexString(),"Dispatch approved.",disaster.getStatus()));
+        reportResponse dispatchApprovedResponse = new reportResponse(disaster.getDisasterId().toHexString(), "Dispatch approved.", disaster.getStatus());
+        userEntity disasterReporter = userRepository.findByUserId(disaster.getUserId());
+        if (disasterReporter != null && disasterReporter.getUsername() != null) {
+            messagingTemplate.convertAndSendToUser(disasterReporter.getUsername(), "/queue/report", dispatchApprovedResponse);
+        }
+        messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(), dispatchApprovedResponse);
         return ResponseEntity.ok("Dispatch approved successfully.");
     } 
 
@@ -462,7 +465,8 @@ public class stationServiceImpl implements stationService {
                 dto.setReportCount(disaster.getReportCount());
                 dto.setDisasterType(disaster.getDisasterType());
                 dto.setForces(Collections.singleton(force)); // this is the only force that failed to find a station so we set it in the dto by creating a singleton set
-                messagingTemplate.convertAndSend("/queue/report/" + disaster.getAssignedAdminId(),dto);
+                messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), dto);
+                messagingTemplate.convertAndSend("/queue/report/" + disaster.getAssignedAdminId(), dto);
                 return;
             }
 
@@ -522,7 +526,8 @@ public class stationServiceImpl implements stationService {
             dto.setReportCount(disaster.getReportCount());
             dto.setDisasterType(disaster.getDisasterType());
             dto.setForces(Collections.singleton(force)); // this is the only force that failed to find a station so we set it in the dto by creating a singleton set
-            messagingTemplate.convertAndSend("/queue/report/" + disaster.getAssignedAdminId(),dto);
+            messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), dto);
+            messagingTemplate.convertAndSend("/queue/report/" + disaster.getAssignedAdminId(), dto);
             return;
         }
 
@@ -725,7 +730,7 @@ public class stationServiceImpl implements stationService {
         dtoo.setAssignedPersonnel(dto.getReqPersonnel());
         dtoo.setStatus(dispatch.getStatus());
 
-        messagingTemplate.convertAndSend("/update/mission" + station.getUserId(), dtoo);
+        messagingTemplate.convertAndSend("/update/mission/" + station.getUserId(), dtoo);
         return ResponseEntity.ok("Backup request sent successfully.");
     }
 
@@ -760,34 +765,74 @@ public class stationServiceImpl implements stationService {
         return ResponseEntity.ok(new dispatches(dispatchDtos, backupDtos));
     }
 
+    private static final java.util.Set<Status> ACTIVE_DISPATCH_STATUSES = java.util.Set.of(
+            Status.VERIFIED,
+            Status.DISPATCH_ASSIGNED,
+            Status.DISPATCHED,
+            Status.DISPATCH_COMPLETED,
+            Status.BACKUP_REQUEST,
+            Status.BACKUP_ASSIGNED,
+            Status.BACKUP_DISPATCHED,
+            Status.BACKUP_DISPATCH_COMPLETED
+    );
+
+    private static final java.util.Set<backupStatus> ACTIVE_BACKUP_STATUSES = java.util.Set.of(
+            backupStatus.PENDING,
+            backupStatus.ASSIGNED,
+            backupStatus.DISPATCHED,
+            backupStatus.BACKUP_DISPATCH_COMPLETED
+    );
+
     @Override
     public void completeDisasterNormal(ObjectId disasterId){
 
-        List<dispatchEntity> dispatches = dispatchRepository.findByDisasterIdAndStatus(disasterId, Status.DISPATCH_COMPLETED);
-        List<backupEntity> backups = backupRepo.findByDisasterIdAndStatus(disasterId, backupStatus.BACKUP_DISPATCH_COMPLETED);
+        List<dispatchEntity> dispatches = dispatchRepository.findByDisasterId(disasterId);
+        List<backupEntity> backups = backupRepo.findByDisasterId(disasterId);
 
-        if(dispatches.isEmpty() && backups.isEmpty()){
+        boolean hasActiveDispatches = dispatches.stream()
+                .anyMatch(d -> d.getStatus() != null && ACTIVE_DISPATCH_STATUSES.contains(d.getStatus()));
+        boolean hasActiveBackups = backups.stream()
+                .anyMatch(b -> b.getStatus() != null && ACTIVE_BACKUP_STATUSES.contains(b.getStatus()));
+
+        if(!hasActiveDispatches && !hasActiveBackups){
             
             disasterEntity disaster = disasterRepository.findByDisasterId(disasterId);
+            if(disaster == null || disaster.getStatus() == Status.COMPLETED){
+                return;
+            }
             
             disaster.setStatus(Status.COMPLETED);
             disaster.setCompletedAt(LocalDateTime.now());
             disasterRepository.save(disaster);
 
-            userEntity admin = userRepository.findById(disaster.getAssignedAdminId()).orElseThrow(() -> new RuntimeException("User not found"));
-            admin.setActiveIncidents(admin.getActiveIncidents()-1);
-            Stats stat = admin.getStats();
-            stat.setCompleted(stat.getCompleted() + 1);
-            stat.setTotalAssigned(stat.getTotalAssigned() + 1);
-            admin.setStats(stat);
-            userRepository.save(admin);
+            if(disaster.getAssignedAdminId() != null){
+                userEntity admin = userRepository.findById(disaster.getAssignedAdminId()).orElse(null);
+                if(admin != null){
+                    admin.setActiveIncidents(Math.max(0, admin.getActiveIncidents() - 1));
+                    Stats stat = admin.getStats();
+                    if(stat != null){
+                        stat.setCompleted(stat.getCompleted() + 1);
+                        stat.setTotalAssigned(stat.getTotalAssigned() + 1);
+                        admin.setStats(stat);
+                    }
+                    userRepository.save(admin);
+                }
+            }
 
-            userEntity user = userRepository.findById(disaster.getUserId()).orElseThrow(() -> new RuntimeException("User not found"));
-            user.setTrustScore(user.getTrustScore() + 10);
-            userRepository.save(user);
+            if(disaster.getUserId() != null){
+                userEntity user = userRepository.findById(disaster.getUserId()).orElse(null);
+                if(user != null){
+                    user.setTrustScore(user.getTrustScore() + 10);
+                    userRepository.save(user);
 
-            messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
-            messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
+                    reportResponse normalCompResponse = new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus());
+                    if(disaster.getAssignedAdminId() != null){
+                        messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), normalCompResponse);
+                    }
+                    messagingTemplate.convertAndSendToUser(user.getUsername(), "/queue/report", normalCompResponse);
+                    messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(), normalCompResponse);
+                }
+            }
 
         }
 
@@ -796,31 +841,54 @@ public class stationServiceImpl implements stationService {
     @Override
     public void completeDisasterBackup(ObjectId disasterId){
 
-        List<dispatchEntity> dispatches = dispatchRepository.findByDisasterIdAndStatus(disasterId, Status.BACKUP_DISPATCH_COMPLETED);
-        List<backupEntity> backups = backupRepo.findByDisasterIdAndStatus(disasterId, backupStatus.BACKUP_DISPATCH_COMPLETED);
+        List<dispatchEntity> dispatches = dispatchRepository.findByDisasterId(disasterId);
+        List<backupEntity> backups = backupRepo.findByDisasterId(disasterId);
 
-        if(dispatches.isEmpty()&&backups.isEmpty()){
+        boolean hasActiveDispatches = dispatches.stream()
+                .anyMatch(d -> d.getStatus() != null && ACTIVE_DISPATCH_STATUSES.contains(d.getStatus()));
+        boolean hasActiveBackups = backups.stream()
+                .anyMatch(b -> b.getStatus() != null && ACTIVE_BACKUP_STATUSES.contains(b.getStatus()));
+
+        if(!hasActiveDispatches && !hasActiveBackups){
             
             disasterEntity disaster = disasterRepository.findByDisasterId(disasterId);
+            if(disaster == null || disaster.getStatus() == Status.COMPLETED){
+                return;
+            }
             
             disaster.setStatus(Status.COMPLETED);
             disaster.setCompletedAt(LocalDateTime.now());
             disasterRepository.save(disaster);
 
-            userEntity admin = userRepository.findById(disaster.getAssignedAdminId()).orElseThrow(() -> new RuntimeException("User not found"));
-            admin.setActiveIncidents(admin.getActiveIncidents()-1);
-            Stats stat = admin.getStats();
-            stat.setCompleted(stat.getCompleted() + 1);
-            stat.setTotalAssigned(stat.getTotalAssigned() + 1);
-            admin.setStats(stat);
-            userRepository.save(admin);
+            if(disaster.getAssignedAdminId() != null){
+                userEntity admin = userRepository.findById(disaster.getAssignedAdminId()).orElse(null);
+                if(admin != null){
+                    admin.setActiveIncidents(Math.max(0, admin.getActiveIncidents() - 1));
+                    Stats stat = admin.getStats();
+                    if(stat != null){
+                        stat.setCompleted(stat.getCompleted() + 1);
+                        stat.setTotalAssigned(stat.getTotalAssigned() + 1);
+                        admin.setStats(stat);
+                    }
+                    userRepository.save(admin);
+                }
+            }
 
-            userEntity user = userRepository.findById(disaster.getUserId()).orElseThrow(() -> new RuntimeException("User not found"));
-            user.setTrustScore(user.getTrustScore() + 10);
-            userRepository.save(user);
+            if(disaster.getUserId() != null){
+                userEntity user = userRepository.findById(disaster.getUserId()).orElse(null);
+                if(user != null){
+                    user.setTrustScore(user.getTrustScore() + 10);
+                    userRepository.save(user);
 
-            messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Backup Mission completed.", disaster.getStatus()));
-            messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus()));
+                    reportResponse backupCompResponse = new reportResponse(disaster.getDisasterId().toHexString(), "Backup Mission completed.", disaster.getStatus());
+                    reportResponse userMissionCompResponse = new reportResponse(disaster.getDisasterId().toHexString(), "Mission completed.", disaster.getStatus());
+                    if(disaster.getAssignedAdminId() != null){
+                        messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), backupCompResponse);
+                    }
+                    messagingTemplate.convertAndSendToUser(user.getUsername(), "/queue/report", userMissionCompResponse);
+                    messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(), userMissionCompResponse);
+                }
+            }
 
         }
         
@@ -829,30 +897,51 @@ public class stationServiceImpl implements stationService {
     @Override 
     public void completeDisasterReject(ObjectId disasterId){
 
-        List<dispatchEntity> dispatches = dispatchRepository.findByDisasterIdAndStatus(disasterId, Status.DISPATCHED);
+        List<dispatchEntity> dispatches = dispatchRepository.findByDisasterId(disasterId);
 
-        if(dispatches.isEmpty()){
+        boolean hasActiveDispatches = dispatches.stream()
+                .anyMatch(d -> d.getStatus() != null && ACTIVE_DISPATCH_STATUSES.contains(d.getStatus()));
+
+        if(!hasActiveDispatches){
             
             disasterEntity disaster = disasterRepository.findByDisasterId(disasterId);
+            if(disaster == null || disaster.getStatus() == Status.DISPATCH_CANCELLED){
+                return;
+            }
             
             disaster.setStatus(Status.DISPATCH_CANCELLED);
             disaster.setCompletedAt(LocalDateTime.now());
             disasterRepository.save(disaster);
 
-            userEntity admin = userRepository.findById(disaster.getAssignedAdminId()).orElseThrow(() -> new RuntimeException("User not found"));
-            admin.setActiveIncidents(admin.getActiveIncidents()-1);
-            Stats stat = admin.getStats();
-            stat.setMarkedFalse(stat.getMarkedFalse() + 1);
-            stat.setTotalAssigned(stat.getTotalAssigned() + 1);
-            admin.setStats(stat);
-            userRepository.save(admin);
+            if(disaster.getAssignedAdminId() != null){
+                userEntity admin = userRepository.findById(disaster.getAssignedAdminId()).orElse(null);
+                if(admin != null){
+                    admin.setActiveIncidents(Math.max(0, admin.getActiveIncidents() - 1));
+                    Stats stat = admin.getStats();
+                    if(stat != null){
+                        stat.setMarkedFalse(stat.getMarkedFalse() + 1);
+                        stat.setTotalAssigned(stat.getTotalAssigned() + 1);
+                        admin.setStats(stat);
+                    }
+                    userRepository.save(admin);
+                }
+            }
 
-            userEntity user = userRepository.findById(disaster.getUserId()).orElseThrow(() -> new RuntimeException("User not found"));
-            user.setTrustScore(Math.max(0, user.getTrustScore() - 20));
-            userRepository.save(user);
+            if(disaster.getUserId() != null){
+                userEntity user = userRepository.findById(disaster.getUserId()).orElse(null);
+                if(user != null){
+                    user.setTrustScore(Math.max(0, user.getTrustScore() - 20));
+                    userRepository.save(user);
 
-            messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission marked as fake.", disaster.getStatus()));
-            messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(), new reportResponse(disaster.getDisasterId().toHexString(), "Mission marked as fake. Please do not spam this platform.", disaster.getStatus()));
+                    reportResponse adminFakeResponse = new reportResponse(disaster.getDisasterId().toHexString(), "Mission marked as fake.", disaster.getStatus());
+                    reportResponse userFakeResponse = new reportResponse(disaster.getDisasterId().toHexString(), "Mission marked as fake. Please do not spam this platform.", disaster.getStatus());
+                    if(disaster.getAssignedAdminId() != null){
+                        messagingTemplate.convertAndSend("/topic/disaster/" + disaster.getAssignedAdminId(), adminFakeResponse);
+                    }
+                    messagingTemplate.convertAndSendToUser(user.getUsername(), "/queue/report", userFakeResponse);
+                    messagingTemplate.convertAndSend("/queue/report/" + disaster.getUserId(), userFakeResponse);
+                }
+            }
 
         }
     }

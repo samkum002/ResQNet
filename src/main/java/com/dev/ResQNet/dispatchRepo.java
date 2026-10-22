@@ -9,6 +9,7 @@ public interface dispatchRepo extends MongoRepository<dispatchEntity, ObjectId> 
     List<dispatchEntity> findByStationIdAndStatus(ObjectId stationId, Status status);
     List<dispatchEntity> findByWorkerIdAndStatus(ObjectId workerId, Status status);
     List<dispatchEntity> findByDisasterIdAndStatus(ObjectId disasterId, Status status);
+    List<dispatchEntity> findByDisasterId(ObjectId disasterId);
 
     List<dispatchEntity> findBySimulationActiveTrue();
 }

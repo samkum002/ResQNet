@@ -27,6 +27,7 @@ public class SecurityConfig {
 
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/disaster/**").hasRole("USER")
+                .requestMatchers("/fetch/**").hasRole("ADMIN")
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 .requestMatchers("/station/**").hasRole("STATION_MANAGER")
                 .requestMatchers("/dispatch/**").hasRole("WORKER")

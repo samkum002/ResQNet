@@ -84,7 +84,7 @@ class DispatchWorkflowServiceTest {
         verify(dispatchRepository).save(dispatch);
         verify(disasterRepository).save(disaster);
         verify(messagingTemplate).convertAndSend(
-                eq("/update/mission" + stationManagerId), any(dispatchDto.class));
+                eq("/update/mission/" + stationManagerId), any(dispatchDto.class));
     }
 
     @Test
