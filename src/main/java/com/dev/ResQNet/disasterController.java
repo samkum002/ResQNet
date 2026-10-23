@@ -93,11 +93,9 @@ public class disasterController {
             disasterrepo.save(disaster);
             reportResponse aiResponse = new reportResponse(disaster.getDisasterId().toHexString(), "AI analysis", disaster.getStatus());
             template.convertAndSendToUser(name, "/queue/report", aiResponse);
-            template.convertAndSend("/queue/report/" + userId, aiResponse);
         }
         reportResponse reportedResponse = new reportResponse(disaster.getDisasterId().toHexString(), "Reported Successfully", disaster.getStatus());
         template.convertAndSendToUser(name, "/queue/report", reportedResponse);
-        template.convertAndSend("/queue/report/" + userId, reportedResponse);
         return ResponseEntity.ok(new reportResponse(disaster.getDisasterId().toHexString(), "Reported Successfully",disaster.getStatus()));
     }
 }

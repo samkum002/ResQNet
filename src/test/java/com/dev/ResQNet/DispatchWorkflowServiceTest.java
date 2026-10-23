@@ -64,7 +64,11 @@ class DispatchWorkflowServiceTest {
         disaster.setDisasterId(disasterId);
         when(dispatchRepository.findById(dispatchId)).thenReturn(Optional.of(dispatch));
         when(userRepository.findByUsername("worker")).thenReturn(worker);
+        userEntity managerUser = new userEntity();
+        managerUser.setUserId(stationManagerId);
+        managerUser.setUsername("manager-user");
         when(stationRepository.findById(stationId)).thenReturn(Optional.of(station));
+        when(userRepository.findById(stationManagerId)).thenReturn(Optional.of(managerUser));
         when(disasterRepository.findByDisasterId(disasterId)).thenReturn(disaster);
 
         var response = service.requestBackup("worker", backupDto(2, 5), dispatchId);
@@ -83,8 +87,8 @@ class DispatchWorkflowServiceTest {
         assertEquals(5, savedBackup.getReqPersonnel());
         verify(dispatchRepository).save(dispatch);
         verify(disasterRepository).save(disaster);
-        verify(messagingTemplate).convertAndSend(
-                eq("/update/mission/" + stationManagerId), any(dispatchDto.class));
+        verify(messagingTemplate).convertAndSendToUser(
+                eq("manager-user"), eq("/update/mission"), any(dispatchDto.class));
     }
 
     @Test

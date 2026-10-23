@@ -90,7 +90,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         dto.setSeverity(entity.getSeverity());
         dto.setSuspicious(entity.getSuspicious());
         dto.setReportCount(entity.getReportCount()); 
-        template.convertAndSend("/topic/disaster/"+adminId, dto);
+        template.convertAndSendToUser(sortedAdmin.getUsername(), "/topic/disaster", dto);
 
     }
 
@@ -130,7 +130,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
                     entity.setAssignedAt(LocalDateTime.now());
                     DisasterRepo.save(entity);
                     dto.setAssignmentStatus(entity.getAssignmentStatus());
-                    template.convertAndSend("/topic/disaster/"+admin.getUserId(), dto);
+                    template.convertAndSendToUser(admin.getUsername(), "/topic/disaster", dto);
                 }
             }
         }
@@ -176,7 +176,10 @@ public class adminDashboardServiceImpl implements adminDashboardService{
                 dto.setDisasterId(entity.getDisasterId());
                 dto.setReportCount(entity.getReportCount());
                 dto.setFinalConfidence(entity.getFinalConfidence());
-                template.convertAndSend("/topic/disaster/"+dnew.getAssignedAdminId(),dto);
+                userEntity assignedAdmin = userrepo.findByUserId(dnew.getAssignedAdminId());
+                if (assignedAdmin != null && assignedAdmin.getUsername() != null) {
+                    template.convertAndSendToUser(assignedAdmin.getUsername(), "/topic/disaster", dto);
+                }
                 userEntity duplicateReporter = userrepo.findByUserId(dnew.getUserId());
                 reportResponse dupMsg = entity.getStatus() == Status.COMPLETED
                         ? new reportResponse(dnew.getDisasterId().toHexString(), "Disaster is already reported and completed.", entity.getStatus())
@@ -184,7 +187,6 @@ public class adminDashboardServiceImpl implements adminDashboardService{
                 if (duplicateReporter != null && duplicateReporter.getUsername() != null) {
                     template.convertAndSendToUser(duplicateReporter.getUsername(), "/queue/report", dupMsg);
                 }
-                template.convertAndSend("/queue/report/" + dnew.getUserId(), dupMsg);
                 return true;
 
             }

@@ -30,11 +30,10 @@ public class webSocketConfiguration implements WebSocketMessageBrokerConfigurer 
     @Bean
     public AuthorizationManager<Message<?>> messageAuthorizationManager(MessageMatcherDelegatingAuthorizationManager.Builder messages) {
         messages
-            .simpSubscribeDestMatchers("/user/queue/**").hasRole("USER")
-            .simpSubscribeDestMatchers("/topic/**").hasRole("ADMIN")
-            .simpSubscribeDestMatchers("/queue/**").hasRole("USER")
-            .simpSubscribeDestMatchers("/update/**").hasRole("STATION_MANAGER")
-            .simpSubscribeDestMatchers("/new/**").hasRole("WORKER")
+            .simpSubscribeDestMatchers("/user/queue/**", "/queue/**").hasRole("USER")
+            .simpSubscribeDestMatchers("/user/topic/**", "/topic/**").hasRole("ADMIN")
+            .simpSubscribeDestMatchers("/user/update/**", "/update/**").hasRole("STATION_MANAGER")
+            .simpSubscribeDestMatchers("/user/new/**", "/new/**").hasRole("WORKER")
             .anyMessage().permitAll();
         return messages.build();
     }

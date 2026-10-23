@@ -73,7 +73,7 @@ public class disasterServiceImpl implements disasterService{
             List<userEntity> admins = dashboardRepo.findByRolesContainingAndAdminState("ADMIN", de.getState());
             List<userEntity> filteredAdmins = admins.stream().filter(admin->admin.getAdminStatus()!=Admin.OFFLINE).toList();
             for(userEntity a : filteredAdmins){
-                template.convertAndSend("/topic/disaster/"+a.getUserId(), dto);
+                template.convertAndSendToUser(a.getUsername(), "/topic/disaster", dto);
             }
         }
     }
