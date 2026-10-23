@@ -1,13 +1,16 @@
 package com.dev.ResQNet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -144,6 +147,60 @@ class DispatchSimulationServiceTest {
 
         verify(taskScheduler, org.mockito.Mockito.times(1)).scheduleAtFixedRate(
                 any(Runnable.class), any(Instant.class), eq(Duration.ofSeconds(2)));
+    }
+
+    @Test
+    void stopDispatchCancelsTaskAndDeactivatesWithoutImpactingOtherSimulations() {
+        ObjectId dispatchId1 = new ObjectId();
+        ObjectId dispatchId2 = new ObjectId();
+        ObjectId stationId = new ObjectId();
+        ObjectId disasterId = new ObjectId();
+        ObjectId reporterId = new ObjectId();
+
+        dispatchEntity dispatch1 = dispatch(dispatchId1, stationId, disasterId, Status.DISPATCHED);
+        dispatchEntity dispatch2 = dispatch(dispatchId2, stationId, disasterId, Status.DISPATCHED);
+        stationEntity station = station(stationId);
+        disasterEntity disaster = disaster(disasterId, reporterId, null);
+
+        ScheduledFuture<?> task1 = mock(ScheduledFuture.class);
+        ScheduledFuture<?> task2 = mock(ScheduledFuture.class);
+
+        when(dispatchRepository.findById(dispatchId1)).thenReturn(Optional.of(dispatch1));
+        when(dispatchRepository.findById(dispatchId2)).thenReturn(Optional.of(dispatch2));
+        when(stationRepository.findById(stationId)).thenReturn(Optional.of(station));
+        when(disasterRepository.findById(disasterId)).thenReturn(Optional.of(disaster));
+        when(disasterRepository.findByLinkedDisasterId(disasterId)).thenReturn(List.of());
+        when(userRepository.findByUserId(reporterId)).thenReturn(user(reporterId, "reporter"));
+        when(dispatchRepository.save(any(dispatchEntity.class))).thenAnswer(call -> call.getArgument(0));
+
+        doReturn(task1).doReturn(task2).when(taskScheduler).scheduleAtFixedRate(
+                any(Runnable.class), any(Instant.class), eq(Duration.ofSeconds(2)));
+
+        service.start(dispatchId1, route());
+        service.start(dispatchId2, route());
+
+        assertTrue(service.isStartingOrRunning(dispatchId1));
+        assertTrue(service.isStartingOrRunning(dispatchId2));
+
+        service.stopDispatch(dispatchId1);
+
+        verify(task1).cancel(false);
+        verify(task2, never()).cancel(anyBoolean());
+        assertFalse(service.isStartingOrRunning(dispatchId1));
+        assertTrue(service.isStartingOrRunning(dispatchId2));
+        assertFalse(dispatch1.getSimulationActive());
+
+        dispatch1.setStatus(Status.RECALLED);
+        service.broadcastStatus(dispatch1);
+
+        org.mockito.ArgumentCaptor<DispatchLocationDto> locationCaptor =
+                org.mockito.ArgumentCaptor.forClass(DispatchLocationDto.class);
+        verify(messagingTemplate, org.mockito.Mockito.atLeastOnce()).convertAndSendToUser(
+                eq("reporter"), eq("/queue/dispatch-location"), locationCaptor.capture());
+
+        boolean containsRecalled = locationCaptor.getAllValues().stream()
+                .anyMatch(dto -> "RECALLED".equals(dto.status()) && dispatchId1.toHexString().equals(dto.dispatchId()));
+        assertTrue(containsRecalled);
     }
 
     private static List<List<Double>> route() {

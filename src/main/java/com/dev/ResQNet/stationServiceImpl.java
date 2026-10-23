@@ -9,6 +9,11 @@ import java.util.List;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.scheduling.annotation.Async;
@@ -169,6 +174,12 @@ public class stationServiceImpl implements stationService {
         dispatch.setStatus(Status.DISPATCH_COMPLETED);
         dispatchRepository.save(dispatch);
 
+        stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() -> new RuntimeException("Station not found"));
+        userEntity adminUser = userRepository.findById(station.getUserId()).orElse(null);
+        if (adminUser != null && adminUser.getUsername() != null) {
+            messagingTemplate.convertAndSendToUser(adminUser.getUsername(), "/update/mission", new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
+        }
+        
         return ResponseEntity.ok("Dispatch completed successfully.");
     }
 
@@ -188,6 +199,11 @@ public class stationServiceImpl implements stationService {
         dispatch.setStatus(Status.DISPATCH_FALSE);
         dispatchRepository.save(dispatch);
 
+        stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() -> new RuntimeException("Station not found"));
+        userEntity adminUser = userRepository.findById(station.getUserId()).orElse(null);
+        if (adminUser != null && adminUser.getUsername() != null) {
+            messagingTemplate.convertAndSendToUser(adminUser.getUsername(), "/update/mission", new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
+        }
         return ResponseEntity.ok("Dispatch marked as fake successfully.");
     }
 
@@ -965,5 +981,322 @@ public class stationServiceImpl implements stationService {
             }
 
         }
+    }
+
+    @Autowired
+    private recallRequestRepo recallRequestRepository;
+
+    @Autowired(required = false)
+    private MongoTemplate mongoTemplate;
+
+    // ─────────────────────────────── RECALL WORKFLOW ────────────────────────────
+
+    @Override
+    public ResponseEntity<?> requestRecall(String username, ObjectId dispatchId, String reason) {
+
+        // 1. Validate worker
+        userEntity worker = userRepository.findByUsername(username);
+        if (worker == null) {
+            return ResponseEntity.status(404).body("Worker not found.");
+        }
+        if (worker.getRoles() == null || !worker.getRoles().contains("WORKER")) {
+            return ResponseEntity.status(403).body("Only workers can request a recall.");
+        }
+
+        // 2. Load dispatch
+        dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElse(null);
+        if (dispatch == null) {
+            return ResponseEntity.status(404).body("Dispatch not found.");
+        }
+
+        // 3. Verify worker belongs to the dispatch's station
+        if (!dispatch.getStationId().equals(worker.getStationId())) {
+            return ResponseEntity.status(403).body("You are not authorized to recall this dispatch.");
+        }
+
+        // 4. Only dispatches that are actively moving may be recalled
+        if (dispatch.getStatus() != Status.DISPATCHED && dispatch.getStatus() != Status.BACKUP_DISPATCHED) {
+            return ResponseEntity.badRequest().body("Recall is only allowed for dispatches that are currently DISPATCHED or BACKUP_DISPATCHED.");
+        }
+
+        // 5. Prevent duplicate pending recall requests for the same dispatch
+        if (recallRequestRepository.findByDispatchIdAndStatus(dispatchId, recallStatus.PENDING).isPresent()) {
+            return ResponseEntity.status(409).body("A recall request for this dispatch is already pending.");
+        }
+
+        // 6. Find station manager for this station
+        stationEntity station = stationRepository.findById(dispatch.getStationId()).orElse(null);
+        if (station == null) {
+            return ResponseEntity.status(404).body("Station not found.");
+        }
+        userEntity manager = (station.getUserId() != null)
+                ? userRepository.findById(station.getUserId()).orElse(null)
+                : null;
+
+        // 7. Persist the recall request BEFORE sending the WebSocket notification
+        recallRequestEntity recall = new recallRequestEntity();
+        recall.setRecallId(new ObjectId());
+        recall.setRequestedAt(LocalDateTime.now());
+        recall.setDispatchId(dispatchId);
+        recall.setDisasterId(dispatch.getDisasterId());
+        recall.setStationId(dispatch.getStationId());
+        recall.setRequestingWorkerId(worker.getUserId());
+        recall.setRequestingWorkerUsername(username);
+        recall.setForceType(dispatch.getForceType());
+        recall.setReason(reason != null ? reason : "");
+        recall.setStatus(recallStatus.PENDING);
+        recallRequestRepository.save(recall);
+
+        // 8. Notify the station manager via WebSocket
+        if (manager != null && manager.getUsername() != null) {
+            recallRequestDto dto = new recallRequestDto(
+                    recall.getRecallId().toHexString(),
+                    dispatchId.toHexString(),
+                    dispatch.getDisasterId() != null ? dispatch.getDisasterId().toHexString() : null,
+                    station.getStationId().toHexString(),
+                    station.getStationName(),
+                    dispatch.getForceType(),
+                    username,
+                    recall.getReason(),
+                    recall.getRequestedAt(),
+                    recallStatus.PENDING,
+                    dispatch.getStatus()
+            );
+            messagingTemplate.convertAndSendToUser(manager.getUsername(), "/update/mission", dto);
+        }
+
+        return ResponseEntity.ok("Recall request submitted. Recall ID: " + recall.getRecallId().toHexString());
+    }
+
+    @Override
+    @Transactional
+    public ResponseEntity<?> approveRecall(String username, ObjectId recallId) {
+
+        // 1. Load the recall request
+        recallRequestEntity recall = recallRequestRepository.findById(recallId).orElse(null);
+        if (recall == null) {
+            return ResponseEntity.status(404).body("Recall request not found.");
+        }
+
+        // 2. Only PENDING requests can be approved
+        if (recall.getStatus() != recallStatus.PENDING) {
+            return ResponseEntity.badRequest().body("This recall request has already been " + recall.getStatus().name().toLowerCase() + ".");
+        }
+
+        // 3. Validate that the approving manager owns this station
+        userEntity manager = userRepository.findByUsername(username);
+        if (manager == null) {
+            return ResponseEntity.status(404).body("Manager not found.");
+        }
+        stationEntity station = stationRepository.findById(recall.getStationId()).orElse(null);
+        if (station == null) {
+            return ResponseEntity.status(404).body("Station not found.");
+        }
+        if (!station.getUserId().equals(manager.getUserId())) {
+            return ResponseEntity.status(403).body("You are not authorized to approve this recall request.");
+        }
+
+        // 4. Load the dispatch and guard against terminal states
+        dispatchEntity dispatch = dispatchRepository.findById(recall.getDispatchId()).orElse(null);
+        if (dispatch == null) {
+            return ResponseEntity.status(404).body("Associated dispatch not found.");
+        }
+        if (dispatch.getStatus() == Status.RECALLED) {
+            return ResponseEntity.badRequest().body("This dispatch has already been recalled.");
+        }
+        if (dispatch.getStatus() != Status.DISPATCHED && dispatch.getStatus() != Status.BACKUP_DISPATCHED) {
+            return ResponseEntity.badRequest().body("Recall can only be approved for a DISPATCHED or BACKUP_DISPATCHED dispatch. Current status: " + dispatch.getStatus());
+        }
+
+        // 5. For backup dispatches, verify the associated backup record exists.
+        // Never fall back to dispatch.getAssignedVehicle()/Personnel() because those reflect the original
+        // mission reservation, not the backup. If missing, fail safely without inventing a reservation.
+        boolean isBackup = dispatch.getStatus() == Status.BACKUP_DISPATCHED;
+        backupEntity backup = null;
+        int vehiclesToRestore = 0;
+        int personnelToRestore = 0;
+
+        if (isBackup) {
+            backup = backupRepo.findByDispatchId(dispatch.getDispatchId());
+            if (backup == null) {
+                return ResponseEntity.status(404).body("Associated backup record not found.");
+            }
+            vehiclesToRestore = backup.getReqVehicles() != null ? backup.getReqVehicles() : 0;
+            personnelToRestore = backup.getReqPersonnel() != null ? backup.getReqPersonnel() : 0;
+        } else {
+            vehiclesToRestore = dispatch.getAssignedVehicle() != null ? dispatch.getAssignedVehicle() : 0;
+            personnelToRestore = dispatch.getAssignedPersonnel() != null ? dispatch.getAssignedPersonnel() : 0;
+        }
+
+        // 6. Atomically transition recall status from PENDING to APPROVED to prevent concurrent double-restoration
+        if (mongoTemplate != null) {
+            Query query = new Query(Criteria.where("_id").is(recallId).and("status").is(recallStatus.PENDING));
+            Update update = new Update()
+                    .set("status", recallStatus.APPROVED)
+                    .set("decidedAt", LocalDateTime.now());
+            recallRequestEntity atomicRecall = mongoTemplate.findAndModify(
+                    query, update, FindAndModifyOptions.options().returnNew(true), recallRequestEntity.class);
+
+            if (atomicRecall == null) {
+                recallRequestEntity current = recallRequestRepository.findById(recallId).orElse(null);
+                if (current != null && current.getStatus() != recallStatus.PENDING) {
+                    return ResponseEntity.badRequest().body("This recall request has already been " + current.getStatus().name().toLowerCase() + ".");
+                }
+                return ResponseEntity.badRequest().body("This recall request is currently being processed or has already been decided.");
+            }
+            recall = atomicRecall;
+        } else {
+            recall.setStatus(recallStatus.APPROVED);
+            recall.setDecidedAt(LocalDateTime.now());
+            recallRequestRepository.save(recall);
+        }
+
+        // 7. Update backup record status if applicable
+        if (backup != null) {
+            backup.setStatus(backupStatus.CANCELLED);
+            backupRepo.save(backup);
+        }
+
+        // 8. Restore resources to the station that owns them (guaranteed exactly once)
+        resourceEntity resource = resourceRepo.findByStationId(dispatch.getStationId());
+        if (resource != null) {
+            resource.setAvailableVehicle(resource.getAvailableVehicle() + vehiclesToRestore);
+            resource.setAvailablePersonnel(resource.getAvailablePersonnel() + personnelToRestore);
+            resourceRepo.save(resource);
+        }
+
+        // 9. Return assigned worker to AVAILABLE status
+        if (dispatch.getWorkerId() != null) {
+            userEntity workerUser = userRepository.findById(dispatch.getWorkerId()).orElse(null);
+            if (workerUser != null) {
+                workerUser.setWorkerStatus(Admin.AVAILABLE);
+                userRepository.save(workerUser);
+            }
+        }
+
+        // 10. Mark dispatch as RECALLED and persist before stopping simulation & broadcasting
+        dispatch.setStatus(Status.RECALLED);
+        dispatch.setSimulationActive(false);
+        dispatch.setCompletedAt(LocalDateTime.now());
+        dispatchRepository.save(dispatch);
+
+        // 11. Stop the scheduled simulation task AFTER persisting the terminal status
+        simulationService.stopDispatch(dispatch.getDispatchId());
+
+        // 12. Broadcast location/status update so frontend map and subscribers remove the vehicle marker
+        simulationService.broadcastStatus(dispatch);
+
+        // 13. Build the notification DTO
+        recallRequestDto dto = new recallRequestDto(
+                recallId.toHexString(),
+                dispatch.getDispatchId().toHexString(),
+                dispatch.getDisasterId() != null ? dispatch.getDisasterId().toHexString() : null,
+                station.getStationId().toHexString(),
+                station.getStationName(),
+                dispatch.getForceType(),
+                recall.getRequestingWorkerUsername(),
+                recall.getReason(),
+                recall.getRequestedAt(),
+                recallStatus.APPROVED,
+                Status.RECALLED
+        );
+
+        // 14. Notify manager (confirmation)
+        messagingTemplate.convertAndSendToUser(manager.getUsername(), "/update/mission", dto);
+
+        // 15. Notify requesting worker
+        if (recall.getRequestingWorkerUsername() != null) {
+            messagingTemplate.convertAndSendToUser(recall.getRequestingWorkerUsername(), "/new/mission", dto);
+        }
+
+        // 16. Notify the assigned admin so the dashboard reflects the change
+        if (dispatch.getDisasterId() != null) {
+            disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
+            if (disaster != null && disaster.getAssignedAdminId() != null) {
+                userEntity adminUser = userRepository.findById(disaster.getAssignedAdminId()).orElse(null);
+                if (adminUser != null && adminUser.getUsername() != null) {
+                    reportResponse adminNotice = new reportResponse(
+                            dispatch.getDisasterId().toHexString(),
+                            "Force recall approved: " + (dispatch.getForceType() != null ? dispatch.getForceType().name() : "force") + " recalled from disaster.",
+                            disaster.getStatus()
+                    );
+                    messagingTemplate.convertAndSendToUser(adminUser.getUsername(), "/topic/disaster", adminNotice);
+                }
+            }
+        }
+
+        return ResponseEntity.ok("Recall approved. Dispatch " + dispatch.getDispatchId().toHexString() + " has been recalled.");
+    }
+
+    @Override
+    public ResponseEntity<?> rejectRecall(String username, ObjectId recallId) {
+
+        // 1. Load the recall request
+        recallRequestEntity recall = recallRequestRepository.findById(recallId).orElse(null);
+        if (recall == null) {
+            return ResponseEntity.status(404).body("Recall request not found.");
+        }
+
+        // 2. Only PENDING requests can be rejected
+        if (recall.getStatus() != recallStatus.PENDING) {
+            return ResponseEntity.badRequest().body("This recall request has already been " + recall.getStatus().name().toLowerCase() + ".");
+        }
+
+        // 3. Validate manager authorization
+        userEntity manager = userRepository.findByUsername(username);
+        if (manager == null) {
+            return ResponseEntity.status(404).body("Manager not found.");
+        }
+        stationEntity station = stationRepository.findById(recall.getStationId()).orElse(null);
+        if (station == null) {
+            return ResponseEntity.status(404).body("Station not found.");
+        }
+        if (!station.getUserId().equals(manager.getUserId())) {
+            return ResponseEntity.status(403).body("You are not authorized to reject this recall request.");
+        }
+
+        // 4. Atomically transition recall status from PENDING to REJECTED
+        if (mongoTemplate != null) {
+            Query query = new Query(Criteria.where("_id").is(recallId).and("status").is(recallStatus.PENDING));
+            Update update = new Update()
+                    .set("status", recallStatus.REJECTED)
+                    .set("decidedAt", LocalDateTime.now());
+            recallRequestEntity atomicRecall = mongoTemplate.findAndModify(
+                    query, update, FindAndModifyOptions.options().returnNew(true), recallRequestEntity.class);
+
+            if (atomicRecall == null) {
+                recallRequestEntity current = recallRequestRepository.findById(recallId).orElse(null);
+                if (current != null && current.getStatus() != recallStatus.PENDING) {
+                    return ResponseEntity.badRequest().body("This recall request has already been " + current.getStatus().name().toLowerCase() + ".");
+                }
+                return ResponseEntity.badRequest().body("This recall request is currently being processed or has already been decided.");
+            }
+            recall = atomicRecall;
+        } else {
+            recall.setStatus(recallStatus.REJECTED);
+            recall.setDecidedAt(LocalDateTime.now());
+            recallRequestRepository.save(recall);
+        }
+
+        // 5. Notify the requesting worker — dispatch is NOT touched
+        dispatchEntity dispatch = dispatchRepository.findById(recall.getDispatchId()).orElse(null);
+        if (recall.getRequestingWorkerUsername() != null) {
+            recallRequestDto dto = new recallRequestDto(
+                    recallId.toHexString(),
+                    recall.getDispatchId().toHexString(),
+                    recall.getDisasterId() != null ? recall.getDisasterId().toHexString() : null,
+                    station.getStationId().toHexString(),
+                    station.getStationName(),
+                    recall.getForceType(),
+                    recall.getRequestingWorkerUsername(),
+                    recall.getReason(),
+                    recall.getRequestedAt(),
+                    recallStatus.REJECTED,
+                    dispatch != null ? dispatch.getStatus() : null
+            );
+            messagingTemplate.convertAndSendToUser(recall.getRequestingWorkerUsername(), "/new/mission", dto);
+        }
+
+        return ResponseEntity.ok("Recall request rejected. The dispatch continues its current lifecycle.");
     }
 }

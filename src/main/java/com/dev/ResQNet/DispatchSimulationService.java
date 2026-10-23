@@ -208,6 +208,30 @@ public class DispatchSimulationService {
         return startingDispatches.contains(key) || activeTasks.containsKey(key);
     }
 
+    /**
+     * Cancels the running simulation task for a specific dispatch and marks
+     * {@code simulationActive = false} in MongoDB so the advance loop cannot
+     * restart itself. Safe to call when no simulation is running.
+     *
+     * @param dispatchId the dispatch whose simulation should be cancelled
+     */
+    public void stopDispatch(ObjectId dispatchId) {
+        stop(dispatchId);
+        markInactiveSafely(dispatchId);
+    }
+
+    /**
+     * Publishes a location/status update event for the given dispatch using
+     * the existing simulation broadcast pipeline. Used to notify subscribers
+     * of terminal status changes (such as RECALLED) so maps and dashboards
+     * can remove or update the active marker.
+     *
+     * @param dispatch the dispatch whose current location and status should be broadcast
+     */
+    public void broadcastStatus(dispatchEntity dispatch) {
+        broadcastSafely(dispatch, false);
+    }
+
     private void schedule(ObjectId dispatchId) {
         String key = dispatchId.toHexString();
         try {

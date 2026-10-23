@@ -101,4 +101,28 @@ public class stationController {
         return stationservice.fakeMission(dispatchId,username);
     }
 
+    /**
+     * Station manager approves a pending recall request.
+     * PATCH /station/recall/{recallId}/approve
+     * Requires ROLE_STATION_MANAGER (enforced by SecurityConfig).
+     */
+    @RequestMapping(value = "/recall/{recallId}/approve", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PATCH})
+    public ResponseEntity<?> approveRecall(@PathVariable ObjectId recallId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        return stationservice.approveRecall(username, recallId);
+    }
+
+    /**
+     * Station manager rejects a pending recall request.
+     * PATCH /station/recall/{recallId}/reject
+     * Requires ROLE_STATION_MANAGER (enforced by SecurityConfig).
+     */
+    @RequestMapping(value = "/recall/{recallId}/reject", method = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PATCH})
+    public ResponseEntity<?> rejectRecall(@PathVariable ObjectId recallId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        return stationservice.rejectRecall(username, recallId);
+    }
+
 }

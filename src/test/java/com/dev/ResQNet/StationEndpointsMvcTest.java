@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.Optional;
@@ -126,6 +127,50 @@ class StationEndpointsMvcTest {
 
         verifyNoInteractions(stationService, stationRepository, userRepository,
                 dispatchRepository, disasterRepository);
+    }
+
+    @Test
+    @WithMockUser(username = "manager", roles = "STATION_MANAGER")
+    void approveRecallEndpointDelegatesToServiceWithManagerUser() throws Exception {
+        ObjectId recallId = new ObjectId();
+
+        doReturn(ResponseEntity.ok("Recall approved."))
+                .when(stationService)
+                .approveRecall("manager", recallId);
+
+        mvc.perform(patch("/station/recall/{recallId}/approve", recallId.toHexString()))
+                .andExpect(status().isOk());
+
+        verify(stationService).approveRecall("manager", recallId);
+    }
+
+    @Test
+    @WithMockUser(username = "manager", roles = "STATION_MANAGER")
+    void rejectRecallEndpointDelegatesToServiceWithManagerUser() throws Exception {
+        ObjectId recallId = new ObjectId();
+
+        doReturn(ResponseEntity.ok("Recall request rejected."))
+                .when(stationService)
+                .rejectRecall("manager", recallId);
+
+        mvc.perform(patch("/station/recall/{recallId}/reject", recallId.toHexString()))
+                .andExpect(status().isOk());
+
+        verify(stationService).rejectRecall("manager", recallId);
+    }
+
+    @Test
+    @WithMockUser(username = "worker", roles = "WORKER")
+    void recallDecisionEndpointsRejectNonStationManager() throws Exception {
+        ObjectId recallId = new ObjectId();
+
+        mvc.perform(patch("/station/recall/{recallId}/approve", recallId.toHexString()))
+                .andExpect(status().isForbidden());
+
+        mvc.perform(patch("/station/recall/{recallId}/reject", recallId.toHexString()))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(stationService);
     }
 
     private static userEntity manager(ObjectId stationId) {

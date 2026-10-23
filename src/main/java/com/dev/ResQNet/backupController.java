@@ -67,4 +67,19 @@ public class backupController {
 
         return service.startDispatch(dispatchId, auth.getName());
     }
+    /**
+     * Worker requests the recall of a specific dispatch.
+     * POST /dispatch/recall/{dispatchId}
+     * Requires ROLE_WORKER (enforced by SecurityConfig).
+     */
+    @PostMapping("/recall/{dispatchId}")
+    public ResponseEntity<?> requestRecall(
+            @PathVariable ObjectId dispatchId,
+            @RequestBody(required = false) recallRequestBody body) {
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        String reason = (body != null) ? body.getReason() : "";
+        return service.requestRecall(username, dispatchId, reason);
+    }
 }

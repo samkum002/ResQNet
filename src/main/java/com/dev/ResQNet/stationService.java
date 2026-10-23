@@ -18,4 +18,31 @@ public interface stationService {
     ResponseEntity<?> completeDispatch(ObjectId dispatchId, String username);
     ResponseEntity<?> falseDispatch(ObjectId dispatchId, String username);
     ResponseEntity<?> startDispatch(ObjectId dispatchId, String username);
+
+    /**
+     * Worker submits a recall request for a specific dispatch.
+     *
+     * @param username   authenticated worker's username (from Security context)
+     * @param dispatchId the dispatch to recall
+     * @param reason     human-readable reason supplied by the worker
+     */
+    ResponseEntity<?> requestRecall(String username, ObjectId dispatchId, String reason);
+
+    /**
+     * Station manager approves a pending recall request.
+     * Stops the simulation, restores resources, and sets dispatch to RECALLED.
+     *
+     * @param username authenticated manager's username
+     * @param recallId the recall request to approve
+     */
+    ResponseEntity<?> approveRecall(String username, ObjectId recallId);
+
+    /**
+     * Station manager rejects a pending recall request.
+     * Dispatch continues unchanged.
+     *
+     * @param username authenticated manager's username
+     * @param recallId the recall request to reject
+     */
+    ResponseEntity<?> rejectRecall(String username, ObjectId recallId);
 }

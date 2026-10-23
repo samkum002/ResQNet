@@ -139,4 +139,34 @@ class DispatchEndpointsMvcTest {
 
         verifyNoInteractions(stationService);
     }
+
+    @Test
+    @WithMockUser(username = "worker-one", roles = "USER")
+    void recallEndpointRejectsNonWorkerRole() throws Exception {
+        ObjectId id = new ObjectId();
+
+        mvc.perform(post("/dispatch/recall/{dispatchId}", id.toHexString())
+                        .contentType("application/json")
+                        .content("{\"reason\":\"Recall test\"}"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(stationService);
+    }
+
+    @Test
+    @WithMockUser(username = "worker-one", roles = "WORKER")
+    void recallEndpointPassesAuthenticatedWorkerAndReasonToService() throws Exception {
+        ObjectId id = new ObjectId();
+
+        doReturn(ResponseEntity.ok("Recall request submitted."))
+                .when(stationService)
+                .requestRecall(eq("worker-one"), eq(id), eq("Assistance no longer needed"));
+
+        mvc.perform(post("/dispatch/recall/{dispatchId}", id.toHexString())
+                        .contentType("application/json")
+                        .content("{\"reason\":\"Assistance no longer needed\"}"))
+                .andExpect(status().isOk());
+
+        verify(stationService).requestRecall(eq("worker-one"), eq(id), eq("Assistance no longer needed"));
+    }
 }
