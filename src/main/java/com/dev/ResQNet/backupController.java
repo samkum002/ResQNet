@@ -82,4 +82,15 @@ public class backupController {
         String reason = (body != null) ? body.getReason() : "";
         return service.requestRecall(username, dispatchId, reason);
     }
+
+    /**
+     * Worker gets active recall requests submitted by them.
+     * GET /dispatch/recall/active
+     */
+    @GetMapping("/recall/active")
+    public ResponseEntity<?> getActiveRecalls() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        return service.getActiveRecallsForWorker(username);
+    }
 }

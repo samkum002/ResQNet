@@ -1,0 +1,346 @@
+.station-dash-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deepest);
+  color: var(--text-primary);
+}
+
+.station-dash-main {
+  flex: 1;
+  max-width: 1300px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.station-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.station-heading {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.station-subheading {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+/* ── Recall Section ── */
+.recall-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: rgba(255, 75, 31, 0.05);
+  border: 1px solid rgba(255, 75, 31, 0.25);
+  border-radius: 14px;
+  padding: 20px;
+}
+
+.recall-header-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge-urgent {
+  background: var(--orange);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.recalls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+}
+
+.recall-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 75, 31, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.recall-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.recall-unit-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recall-badge {
+  background: rgba(255, 75, 31, 0.15);
+  border: 1px solid rgba(255, 75, 31, 0.35);
+  color: #ff8c72;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.recall-disp-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.recall-timestamp {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.recall-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.worker-info-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.worker-info-row strong {
+  color: #fff;
+}
+
+.reason-bubble {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(4, 14, 32, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.reason-bubble svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.recall-card-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.btn-recall-approve {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: linear-gradient(135deg, var(--orange) 0%, #d8340d 100%);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 10px rgba(255, 75, 31, 0.3);
+}
+
+.btn-recall-approve:hover:not(:disabled) {
+  opacity: 0.92;
+  box-shadow: 0 4px 16px rgba(255, 75, 31, 0.45);
+}
+
+.btn-recall-reject {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-recall-reject:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* ── Missions Grid ── */
+.missions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.missions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+}
+
+.mission-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.mission-card:hover {
+  border-color: rgba(0, 212, 255, 0.35);
+  transform: translateY(-2px);
+}
+
+.mission-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mission-top-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mission-id {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cyan);
+}
+
+.mission-force-badge {
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.mission-resource-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: rgba(4, 14, 32, 0.5);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.resource-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.resource-item strong {
+  color: #fff;
+}
+
+.mission-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+}
+
+.status-label {
+  color: var(--text-muted);
+}
+
+.status-pending {
+  background: rgba(255, 179, 71, 0.15);
+  border: 1px solid rgba(255, 179, 71, 0.3);
+  color: var(--warning);
+}
+
+.mission-actions {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.mission-actions-single {
+  grid-template-columns: 1fr;
+}
+
+.status-completed {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #10b981;
+}
+
+.status-rejected {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #ef4444;
+}
+
+.mission-active-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--cyan);
+  background: rgba(0, 212, 255, 0.06);
+  border: 1px solid rgba(0, 212, 255, 0.15);
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+@media (max-width: 600px) {
+  .missions-grid, .recalls-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -59,6 +60,7 @@ class DispatchEndpointsMvcTest {
                 .requestBackup(eq("worker-one"), any(backupDTO.class), eq(id));
 
         mvc.perform(post("/dispatch/backup/{dispatchId}/request", id.toHexString())
+                        .with(csrf())
                         .contentType("application/json")
                         .content("{\"reqVehicles\":2,\"reqPersonnel\":5}"))
                 .andExpect(status().isOk());
@@ -71,7 +73,7 @@ class DispatchEndpointsMvcTest {
     void dispatchRoutesRejectNonWorkerRole() throws Exception {
         ObjectId id = new ObjectId();
 
-        mvc.perform(post("/dispatch/start/{dispatchId}", id.toHexString()))
+        mvc.perform(post("/dispatch/start/{dispatchId}", id.toHexString()).with(csrf()))
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(stationService);
@@ -86,7 +88,7 @@ class DispatchEndpointsMvcTest {
                 .when(stationService)
                 .startDispatch(id, "worker-one");
 
-        mvc.perform(post("/dispatch/start/{dispatchId}", id.toHexString()))
+        mvc.perform(post("/dispatch/start/{dispatchId}", id.toHexString()).with(csrf()))
                 .andExpect(status().isOk());
 
         verify(stationService).startDispatch(id, "worker-one");
@@ -101,7 +103,7 @@ class DispatchEndpointsMvcTest {
                 .when(stationService)
                 .startDispatch(id, "worker-one");
 
-        mvc.perform(post("/dispatch/start/{dispatchId}", id.toHexString()))
+        mvc.perform(post("/dispatch/start/{dispatchId}", id.toHexString()).with(csrf()))
                 .andExpect(status().isNotFound());
 
         verify(stationService).startDispatch(id, "worker-one");
@@ -121,10 +123,10 @@ class DispatchEndpointsMvcTest {
                 .when(stationService)
                 .falseDispatch(falseId, "worker-one");
 
-        mvc.perform(patch("/dispatch/complete/{dispatchId}", completeId.toHexString()))
+        mvc.perform(patch("/dispatch/complete/{dispatchId}", completeId.toHexString()).with(csrf()))
                 .andExpect(status().isOk());
 
-        mvc.perform(patch("/dispatch/false/{dispatchId}", falseId.toHexString()))
+        mvc.perform(patch("/dispatch/false/{dispatchId}", falseId.toHexString()).with(csrf()))
                 .andExpect(status().isOk());
 
         verify(stationService).completeDispatch(completeId, "worker-one");
@@ -134,7 +136,7 @@ class DispatchEndpointsMvcTest {
     @Test
     @WithMockUser(username = "worker-one", roles = "WORKER")
     void malformedDispatchIdIsRejectedBeforeCallingService() throws Exception {
-        mvc.perform(post("/dispatch/start/not-an-object-id"))
+        mvc.perform(post("/dispatch/start/not-an-object-id").with(csrf()))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(stationService);
@@ -146,6 +148,7 @@ class DispatchEndpointsMvcTest {
         ObjectId id = new ObjectId();
 
         mvc.perform(post("/dispatch/recall/{dispatchId}", id.toHexString())
+                        .with(csrf())
                         .contentType("application/json")
                         .content("{\"reason\":\"Recall test\"}"))
                 .andExpect(status().isForbidden());
@@ -163,6 +166,7 @@ class DispatchEndpointsMvcTest {
                 .requestRecall(eq("worker-one"), eq(id), eq("Assistance no longer needed"));
 
         mvc.perform(post("/dispatch/recall/{dispatchId}", id.toHexString())
+                        .with(csrf())
                         .contentType("application/json")
                         .content("{\"reason\":\"Assistance no longer needed\"}"))
                 .andExpect(status().isOk());

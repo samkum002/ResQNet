@@ -1,19 +1,17 @@
 package com.dev.ResQNet;
 
-
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.PatchMapping;
-
 
 @RestController
 @RequestMapping("/admin")
@@ -39,8 +37,52 @@ public class adminDashboardController {
         return adminDashboardservice.disasterList(user.getUserId());
     }
 
+    @PatchMapping("/{disasterId}/update")
+    public ResponseEntity<?> updateDisaster(@PathVariable ObjectId disasterId, @RequestBody(required=false) disasterDto dto){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String name = auth.getName();
+        userEntity user = userrepo.findByUsername(name);
+        disasterEntity disaster = disasterrepo.findByDisasterId(disasterId);
+        if(user == null || disaster == null){
+            return ResponseEntity.notFound().build();
+        }
+        if(dto != null){
+            if(dto.getSeverity() != null){
+                disaster.setSeverity(dto.getSeverity());
+            }
+            if(dto.getForces() != null){
+                disaster.setForces(dto.getForces());
+            }
+            if(dto.getDisasterType() != null){
+                disaster.setDisasterType(dto.getDisasterType());
+            }
+            if(dto.getSuspicious() != null){
+                disaster.setSuspicious(dto.getSuspicious());
+            }
+            if(dto.getUserReport() != null && !dto.getUserReport().isBlank()){
+                disaster.setUserReport(dto.getUserReport().trim());
+            }
+            disasterrepo.save(disaster);
+        }
+        disasterDto responseDto = new disasterDto();
+        responseDto.setDisasterId(disaster.getDisasterId().toHexString());
+        responseDto.setSeverity(disaster.getSeverity());
+        responseDto.setForces(disaster.getForces());
+        responseDto.setDisasterType(disaster.getDisasterType());
+        responseDto.setSuspicious(disaster.getSuspicious());
+        responseDto.setUserReport(disaster.getUserReport());
+        responseDto.setStatus(disaster.getStatus());
+        responseDto.setAiStatus(disaster.getAiStatus());
+        responseDto.setAiConfidence(disaster.getAiConfidence());
+        responseDto.setFinalConfidence(disaster.getFinalConfidence());
+        responseDto.setReportCount(disaster.getReportCount());
+        responseDto.setState(disaster.getState());
+        responseDto.setImage(disaster.getImage() != null ? disaster.getImage().toHexString() : null);
+        return ResponseEntity.ok(responseDto);
+    }
+
     @PatchMapping("/{disasterId}/approve")
-    public ResponseEntity<?> approveDisaster(@PathVariable ObjectId disasterId,@RequestBody(required=false) disasterDto dto){
+    public ResponseEntity<?> approveDisaster(@PathVariable ObjectId disasterId, @RequestBody(required=false) disasterDto dto){
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String name = auth.getName();
         userEntity user = userrepo.findByUsername(name);
@@ -68,7 +110,8 @@ public class adminDashboardController {
         }
         if(disaster.getAssignmentStatus() == Assignment.REASSIGNED){
             user.setActiveIncidents(user.getActiveIncidents()+1);
-            disaster.setAssignedAdminId(user.getUserId()); disasterrepo.save(disaster);
+            disaster.setAssignedAdminId(user.getUserId()); 
+            disasterrepo.save(disaster);
             userrepo.save(user);
         }
         return adminDashboardservice.disasterApprove(disasterId);
@@ -88,7 +131,8 @@ public class adminDashboardController {
         }
         if(disaster.getAssignmentStatus() == Assignment.REASSIGNED){
             user.setActiveIncidents(user.getActiveIncidents()+1);
-            disaster.setAssignedAdminId(user.getUserId()); disasterrepo.save(disaster);
+            disaster.setAssignedAdminId(user.getUserId()); 
+            disasterrepo.save(disaster);
             userrepo.save(user);
         }
         return adminDashboardservice.disasterReject(disasterId);

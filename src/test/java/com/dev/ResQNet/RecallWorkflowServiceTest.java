@@ -681,6 +681,7 @@ class RecallWorkflowServiceTest {
         dispatch.setStationId(stationId);
         dispatch.setDisasterId(disasterId);
         dispatch.setStatus(status);
+        dispatch.setArrivedAt(java.time.LocalDateTime.now());
         return dispatch;
     }
 

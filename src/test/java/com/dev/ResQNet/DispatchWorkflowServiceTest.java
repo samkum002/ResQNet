@@ -242,6 +242,38 @@ class DispatchWorkflowServiceTest {
         dispatch.setStationId(stationId);
         dispatch.setDisasterId(disasterId);
         dispatch.setStatus(status);
+        dispatch.setArrivedAt(java.time.LocalDateTime.now());
         return dispatch;
+    }
+
+    @Test
+    void workerActionsAreRejectedBeforeArrival() {
+        ObjectId dispatchId = new ObjectId();
+        ObjectId stationId = new ObjectId();
+        dispatchEntity movingDispatch = new dispatchEntity();
+        movingDispatch.setDispatchId(dispatchId);
+        movingDispatch.setStationId(stationId);
+        movingDispatch.setDisasterId(new ObjectId());
+        movingDispatch.setStatus(Status.DISPATCHED);
+        movingDispatch.setArrivedAt(null); // has not arrived
+
+        when(dispatchRepository.findById(dispatchId)).thenReturn(Optional.of(movingDispatch));
+        when(userRepository.findByUsername("worker")).thenReturn(worker(stationId));
+
+        // 1. completeDispatch
+        var completeRes = service.completeDispatch(dispatchId, "worker");
+        assertEquals(HttpStatus.BAD_REQUEST, completeRes.getStatusCode());
+
+        // 2. falseDispatch
+        var falseRes = service.falseDispatch(dispatchId, "worker");
+        assertEquals(HttpStatus.BAD_REQUEST, falseRes.getStatusCode());
+
+        // 3. requestBackup
+        var backupRes = service.requestBackup("worker", backupDto(1, 1), dispatchId);
+        assertEquals(HttpStatus.BAD_REQUEST, backupRes.getStatusCode());
+
+        // 4. requestRecall
+        var recallRes = service.requestRecall("worker", dispatchId, "Need recall");
+        assertEquals(HttpStatus.BAD_REQUEST, recallRes.getStatusCode());
     }
 }

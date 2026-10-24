@@ -4,7 +4,9 @@ package com.dev.ResQNet;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,8 +92,10 @@ public class stationServiceImpl implements stationService {
             routePoints = simulationService.calculateRoute(dispatchId);
         } catch (IllegalArgumentException ex) {
             return ResponseEntity.badRequest().body(ex.getMessage());
+        } catch (IllegalStateException ex) {
+            return ResponseEntity.status(502).body(ex.getMessage());
         } catch (Exception ex) {
-            return ResponseEntity.status(502).body("Could not calculate a route. Please retry.");
+            return ResponseEntity.status(502).body(ex.getMessage() != null ? ex.getMessage() : "Could not calculate a route. Please retry.");
         }
 
         Status previousStatus = dispatch.getStatus();
@@ -137,6 +141,21 @@ public class stationServiceImpl implements stationService {
         }
     }
 
+    private boolean hasDispatchArrived(dispatchEntity dispatch) {
+        if (dispatch == null) {
+            return false;
+        }
+        if (dispatch.getArrivedAt() != null) {
+            return true;
+        }
+        if (dispatch.getRoutePoints() != null && !dispatch.getRoutePoints().isEmpty()
+                && dispatch.getRouteIndex() != null
+                && dispatch.getRouteIndex() >= dispatch.getRoutePoints().size()) {
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public ResponseEntity<?> completeDispatch(ObjectId dispatchId, String username){
 
@@ -150,6 +169,9 @@ public class stationServiceImpl implements stationService {
             if (!dispatch.getStationId().equals(worker.getStationId())){
                 return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
             }
+            if (!hasDispatchArrived(dispatch)) {
+                return ResponseEntity.badRequest().body("Unit has not yet arrived at incident destination.");
+            }
             if (dispatch.getStatus() != Status.BACKUP_DISPATCHED) {
                 return ResponseEntity.badRequest().body("This mission is not in a state that can be completed.");
             }
@@ -157,8 +179,23 @@ public class stationServiceImpl implements stationService {
             dispatch.setStatus(Status.BACKUP_DISPATCH_COMPLETED);
             dispatchRepository.save(dispatch);
 
-            backup.setStatus(backupStatus.BACKUP_DISPATCH_COMPLETED);
-            backupRepo.save(backup);
+            if (backup != null) {
+                backup.setStatus(backupStatus.BACKUP_DISPATCH_COMPLETED);
+                backupRepo.save(backup);
+            }
+
+            stationEntity station = stationRepository.findById(dispatch.getStationId()).orElse(null);
+            userEntity adminUser = (station != null && station.getUserId() != null) ? userRepository.findById(station.getUserId()).orElse(null) : null;
+            if (adminUser == null && station != null && station.getStationId() != null) {
+                adminUser = userRepository.findAll().stream()
+                        .filter(u -> station.getStationId().equals(u.getStationId()) && u.getRoles() != null && u.getRoles().contains("STATION_MANAGER"))
+                        .findFirst().orElse(null);
+            }
+            dispatchDto dto = new dispatchDto(dispatch.getSeverity(), dispatch.getDispatchId().toHexString(), dispatch.getForceType(), dispatch.getAssignedVehicle(), dispatch.getAssignedPersonnel(), dispatch.getStatus());
+            if (adminUser != null && adminUser.getUsername() != null) {
+                messagingTemplate.convertAndSendToUser(adminUser.getUsername(), "/update/mission", dto);
+            }
+            messagingTemplate.convertAndSend("/update/mission", dto);
 
             return ResponseEntity.ok("Backup Dispatch completed successfully.");
         }
@@ -166,19 +203,28 @@ public class stationServiceImpl implements stationService {
         if (!dispatch.getStationId().equals(worker.getStationId())){
             return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
         }
+        if (!hasDispatchArrived(dispatch)) {
+            return ResponseEntity.badRequest().body("Unit has not yet arrived at incident destination.");
+        }
         if (dispatch.getStatus() != Status.DISPATCHED) {
             return ResponseEntity.badRequest().body("This mission is not in a state that can be completed.");
         }
-       
 
         dispatch.setStatus(Status.DISPATCH_COMPLETED);
         dispatchRepository.save(dispatch);
 
-        stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() -> new RuntimeException("Station not found"));
-        userEntity adminUser = userRepository.findById(station.getUserId()).orElse(null);
-        if (adminUser != null && adminUser.getUsername() != null) {
-            messagingTemplate.convertAndSendToUser(adminUser.getUsername(), "/update/mission", new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
+        stationEntity station = stationRepository.findById(dispatch.getStationId()).orElse(null);
+        userEntity adminUser = (station != null && station.getUserId() != null) ? userRepository.findById(station.getUserId()).orElse(null) : null;
+        if (adminUser == null && station != null && station.getStationId() != null) {
+            adminUser = userRepository.findAll().stream()
+                    .filter(u -> station.getStationId().equals(u.getStationId()) && u.getRoles() != null && u.getRoles().contains("STATION_MANAGER"))
+                    .findFirst().orElse(null);
         }
+        dispatchDto dto = new dispatchDto(dispatch.getSeverity(), dispatch.getDispatchId().toHexString(), dispatch.getForceType(), dispatch.getAssignedVehicle(), dispatch.getAssignedPersonnel(), dispatch.getStatus());
+        if (adminUser != null && adminUser.getUsername() != null) {
+            messagingTemplate.convertAndSendToUser(adminUser.getUsername(), "/update/mission", dto);
+        }
+        messagingTemplate.convertAndSend("/update/mission", dto);
         
         return ResponseEntity.ok("Dispatch completed successfully.");
     }
@@ -192,18 +238,40 @@ public class stationServiceImpl implements stationService {
         if (!dispatch.getStationId().equals(worker.getStationId())){
             return ResponseEntity.status(403).body("You are not authorized to mark this mission as fake.");
         }
-        if (dispatch.getStatus() != Status.DISPATCHED) {
+
+        if (!hasDispatchArrived(dispatch)) {
+            return ResponseEntity.badRequest().body("Unit has not yet arrived at incident destination.");
+        }
+
+        boolean isBackup = dispatch.getStatus() == Status.BACKUP_DISPATCHED;
+        if (dispatch.getStatus() != Status.DISPATCHED && !isBackup) {
             return ResponseEntity.badRequest().body("This mission is not in a state that can be marked as fake.");
+        }
+
+        if (isBackup) {
+            backupEntity backup = backupRepo.findByDispatchId(dispatchId);
+            if (backup != null) {
+                backup.setStatus(backupStatus.FAILED);
+                backupRepo.save(backup);
+            }
         }
 
         dispatch.setStatus(Status.DISPATCH_FALSE);
         dispatchRepository.save(dispatch);
 
-        stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() -> new RuntimeException("Station not found"));
-        userEntity adminUser = userRepository.findById(station.getUserId()).orElse(null);
-        if (adminUser != null && adminUser.getUsername() != null) {
-            messagingTemplate.convertAndSendToUser(adminUser.getUsername(), "/update/mission", new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),dispatch.getAssignedVehicle(),dispatch.getAssignedPersonnel(),dispatch.getStatus()));
+        stationEntity station = stationRepository.findById(dispatch.getStationId()).orElse(null);
+        userEntity adminUser = (station != null && station.getUserId() != null) ? userRepository.findById(station.getUserId()).orElse(null) : null;
+        if (adminUser == null && station != null && station.getStationId() != null) {
+            adminUser = userRepository.findAll().stream()
+                    .filter(u -> station.getStationId().equals(u.getStationId()) && u.getRoles() != null && u.getRoles().contains("STATION_MANAGER"))
+                    .findFirst().orElse(null);
         }
+        dispatchDto dto = new dispatchDto(dispatch.getSeverity(), dispatch.getDispatchId().toHexString(), dispatch.getForceType(), dispatch.getAssignedVehicle(), dispatch.getAssignedPersonnel(), dispatch.getStatus());
+        if (adminUser != null && adminUser.getUsername() != null) {
+            messagingTemplate.convertAndSendToUser(adminUser.getUsername(), "/update/mission", dto);
+        }
+        messagingTemplate.convertAndSend("/update/mission", dto);
+
         return ResponseEntity.ok("Dispatch marked as fake successfully.");
     }
 
@@ -255,6 +323,31 @@ public class stationServiceImpl implements stationService {
                 return Double.compare(distanceA, distanceB);
             });
             if (stations.isEmpty()) {
+                disasterDto dto = new disasterDto();
+                dto.setDisasterId(disaster.getDisasterId().toHexString());
+                dto.setStatus(disaster.getStatus());
+                dto.setAiStatus(disaster.getAiStatus());
+                dto.setSeverity(disaster.getSeverity());
+                dto.setAiConfidence(disaster.getAiConfidence());
+                dto.setFinalConfidence(disaster.getFinalConfidence());
+                dto.setSuspicious(disaster.getSuspicious());
+                if (disaster.getImage() != null) {
+                    dto.setImage(disaster.getImage().toHexString());
+                }
+                dto.setAssignmentStatus(disaster.getAssignmentStatus());
+                dto.setState(disaster.getState());
+                dto.setUserReport(disaster.getUserReport());
+                dto.setReportCount(disaster.getReportCount());
+                dto.setDisasterType(disaster.getDisasterType());
+                dto.setForces(Collections.singleton(force)); // this is the only force that failed to find a station so we set it in the dto by creating a singleton set
+                userEntity adminUser = (disaster.getAssignedAdminId() != null)
+                        ? userRepository.findById(disaster.getAssignedAdminId()).orElse(null)
+                        : null;
+                if (adminUser != null && adminUser.getUsername() != null) {
+                    messagingTemplate.convertAndSendToUser(adminUser.getUsername(), "/topic/disaster", dto);
+                }
+                messagingTemplate.convertAndSend("/topic/disaster", dto);
+                index++;
                 continue;
             }
             stationEntity station = stations.get(0);
@@ -299,8 +392,12 @@ public class stationServiceImpl implements stationService {
     @Override
     public ResponseEntity<stationDashboard> getMissionsForStation(String username) {
         userEntity user = userRepository.findByUsername(username);
-        List<dispatchEntity> dispatches = dispatchRepository.findByStationIdAndStatus(user.getStationId(), Status.VERIFIED);
+        List<dispatchEntity> dispatches = dispatchRepository.findByStationIdAndStatusIn(
+                user.getStationId(),
+                List.of(Status.VERIFIED, Status.DISPATCH_COMPLETED, Status.BACKUP_DISPATCH_COMPLETED, Status.DISPATCH_FALSE)
+        );
         List<dispatchDto> dispatchDtos = new ArrayList<>();
+        Set<String> seenIds = new HashSet<>();
         for(dispatchEntity dispatch : dispatches){
             dispatchDto dto = new dispatchDto();
             dto.setDispatchId(dispatch.getDispatchId().toHexString());
@@ -310,10 +407,26 @@ public class stationServiceImpl implements stationService {
             dto.setAssignedPersonnel(dispatch.getAssignedPersonnel());
             dto.setStatus(dispatch.getStatus());
             dispatchDtos.add(dto);
+            seenIds.add(dto.getDispatchId());
+        }
+        List<backupEntity> pendingBackups = backupRepo.findByStationIdAndStatus(user.getStationId(), backupStatus.PENDING);
+        if (pendingBackups != null) {
+            for (backupEntity b : pendingBackups) {
+                if (b.getDispatchId() != null && !seenIds.contains(b.getDispatchId().toHexString())) {
+                    dispatchDto dto = new dispatchDto();
+                    dto.setDispatchId(b.getDispatchId().toHexString());
+                    dto.setSeverity(b.getSeverity());
+                    dto.setForceType(b.getForce());
+                    dto.setAssignedVehicle(b.getReqVehicles());
+                    dto.setAssignedPersonnel(b.getReqPersonnel());
+                    dto.setStatus(Status.BACKUP_REQUEST);
+                    dispatchDtos.add(dto);
+                    seenIds.add(b.getDispatchId().toHexString());
+                }
+            }
         }
         Stats stats = user.getStats();
         return ResponseEntity.ok(new stationDashboard(stats,dispatchDtos));
-
     }
 
     @Override
@@ -322,21 +435,38 @@ public class stationServiceImpl implements stationService {
 
         dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() ->new RuntimeException("Dispatch not found"));
 
-        if(dispatch.getStatus() == Status.BACKUP_REQUEST){
+        backupEntity pendingBackup = backupRepo.findByDispatchId(dispatchId);
+        boolean isBackupApproval = (dispatch.getStatus() == Status.BACKUP_REQUEST)
+                || (pendingBackup != null && pendingBackup.getStatus() == backupStatus.PENDING);
 
-            if (!dispatch.getStationId().equals(userRepository.findByUsername(username).getStationId())) {
+        if(isBackupApproval){
+            backupEntity backup = pendingBackup != null ? pendingBackup : backupRepo.findByDispatchId(dispatchId);
+            if (backup == null) {
+                return ResponseEntity.badRequest().body("Associated backup record not found.");
+            }
+
+            userEntity manager = userRepository.findByUsername(username);
+            if (!dispatch.getStationId().equals(manager.getStationId())
+                    && (backup.getStationId() == null || !backup.getStationId().equals(manager.getStationId()))) {
                 return ResponseEntity.status(403).body("You are not authorized to approve this mission.");
             }
 
-            backupEntity backup = backupRepo.findByDispatchId(dispatchId);
-
-            resourceEntity resource = resourceRepo.findByStationId(dispatch.getStationId());
+            resourceEntity resource = resourceRepo.findByStationId(manager.getStationId());
             disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
 
-            stationEntity station = stationRepository.findById(dispatch.getStationId()).orElseThrow(() ->new RuntimeException("Station not found"));
+            stationEntity station = stationRepository.findById(manager.getStationId()).orElseThrow(() ->new RuntimeException("Station not found"));
 
             if (disaster == null) {
                 return ResponseEntity.badRequest().body("Disaster not found.");
+            }
+
+            if (resource == null) {
+                return ResponseEntity.badRequest().body("Station resources not found.");
+            }
+
+            List<userEntity> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(), Admin.AVAILABLE);
+            if (workers.isEmpty()) {
+                return ResponseEntity.badRequest().body("No available workers at this station.");
             }
 
             if (resource.getAvailablePersonnel() < backup.getReqPersonnel()) {
@@ -347,33 +477,45 @@ public class stationServiceImpl implements stationService {
                 return ResponseEntity.badRequest().body("Not enough available vehicles.");
             }
 
-            resource.setAvailablePersonnel(resource.getAvailablePersonnel()- backup.getReqPersonnel());
-            resource.setAvailableVehicle(resource.getAvailableVehicle()- backup.getReqVehicles());
+            resource.setAvailablePersonnel(Math.max(0, resource.getAvailablePersonnel() - backup.getReqPersonnel()));
+            resource.setAvailableVehicle(Math.max(0, resource.getAvailableVehicle() - backup.getReqVehicles()));
             resourceRepo.save(resource);
 
-            List<userEntity> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
-            if(workers.isEmpty()){
-                return ResponseEntity.badRequest().body("No available workers at this station.");
-            }
             userEntity worker = workers.get(0);
             worker.setWorkerStatus(Admin.BUSY);
             userRepository.save(worker);
 
-            dispatch.setStatus(Status.BACKUP_ASSIGNED);
-            dispatch.setWorkerId(worker.getUserId());
+            // Restore/keep original dispatch active so original worker and simulation continue
+            dispatch.setStatus(Status.DISPATCHED);
             dispatchRepository.save(dispatch);
 
+            // Create new independent backup dispatch for the assigned reinforcement unit
+            dispatchEntity backupDispatch = new dispatchEntity();
+            backupDispatch.setDisasterId(disaster.getDisasterId());
+            backupDispatch.setStationId(station.getStationId());
+            backupDispatch.setForceType(station.getForceType() != null ? station.getForceType() : backup.getForce());
+            backupDispatch.setSeverity(disaster.getSeverity());
+            backupDispatch.setAssignedVehicle(backup.getReqVehicles());
+            backupDispatch.setAssignedPersonnel(backup.getReqPersonnel());
+            backupDispatch.setStatus(Status.BACKUP_ASSIGNED);
+            backupDispatch.setWorkerId(worker.getUserId());
+            backupDispatch.setDispatchedAt(LocalDateTime.now());
+            dispatchRepository.save(backupDispatch);
+
             disaster.setStatus(Status.BACKUP_ASSIGNED);
-            disaster.getStationId().add(station.getStationId());
+            if (!disaster.getStationId().contains(station.getStationId())) {
+                disaster.getStationId().add(station.getStationId());
+            }
             disasterRepository.save(disaster);
 
             backup.setStatus(backupStatus.ASSIGNED);
             backup.setStationId(station.getStationId());
             backup.setAssingnedAt(LocalDateTime.now());
             backup.setWorkerId(worker.getUserId());
+            backup.setDispatchId(backupDispatch.getDispatchId());
             backupRepo.save(backup);
 
-            messagingTemplate.convertAndSendToUser(worker.getUsername(), "/new/mission", new dispatchDto(dispatch.getSeverity(),dispatch.getDispatchId().toHexString(),dispatch.getForceType(),backup.getReqVehicles(),backup.getReqPersonnel(),dispatch.getStatus()));
+            messagingTemplate.convertAndSendToUser(worker.getUsername(), "/new/mission", new dispatchDto(backupDispatch.getSeverity(),backupDispatch.getDispatchId().toHexString(),backupDispatch.getForceType(),backup.getReqVehicles(),backup.getReqPersonnel(),backupDispatch.getStatus()));
             userEntity adminUser = userRepository.findById(disaster.getAssignedAdminId()).orElse(null);
             if (adminUser != null && adminUser.getUsername() != null) {
                 messagingTemplate.convertAndSendToUser(adminUser.getUsername(), "/topic/disaster", new reportResponse(disaster.getDisasterId().toHexString(),"Backup Dispatch approved.",disaster.getStatus()));
@@ -398,6 +540,15 @@ public class stationServiceImpl implements stationService {
             return ResponseEntity.badRequest().body("Disaster not found.");
         }
 
+        if (resource == null) {
+            return ResponseEntity.badRequest().body("Station resources not found.");
+        }
+
+        List<userEntity> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(), Admin.AVAILABLE);
+        if (workers.isEmpty()) {
+            return ResponseEntity.badRequest().body("No available workers at this station.");
+        }
+
         if (resource.getAvailablePersonnel() < dispatch.getAssignedPersonnel()) {
             return ResponseEntity.badRequest().body("Not enough available personnel.");
         }
@@ -406,14 +557,10 @@ public class stationServiceImpl implements stationService {
             return ResponseEntity.badRequest().body("Not enough available vehicles.");
         }
 
-        resource.setAvailablePersonnel(resource.getAvailablePersonnel()- dispatch.getAssignedPersonnel());
-        resource.setAvailableVehicle(resource.getAvailableVehicle()- dispatch.getAssignedVehicle());
+        resource.setAvailablePersonnel(Math.max(0, resource.getAvailablePersonnel() - dispatch.getAssignedPersonnel()));
+        resource.setAvailableVehicle(Math.max(0, resource.getAvailableVehicle() - dispatch.getAssignedVehicle()));
         resourceRepo.save(resource);
 
-        List<userEntity> workers = userRepository.findByStationIdAndWorkerStatus(station.getStationId(),Admin.AVAILABLE);
-        if(workers.isEmpty()){
-            return ResponseEntity.badRequest().body("No available workers at this station.");
-        }
         userEntity worker = workers.get(0);
         worker.setWorkerStatus(Admin.BUSY);
         userRepository.save(worker);
@@ -447,9 +594,13 @@ public class stationServiceImpl implements stationService {
         
         dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
 
-        if(dispatch.getStatus() == Status.BACKUP_REQUEST){
+        backupEntity pendingBackup = backupRepo.findByDispatchId(dispatchId);
+        boolean isBackupReassignment = (dispatch.getStatus() == Status.BACKUP_REQUEST)
+                || (pendingBackup != null && pendingBackup.getStatus() == backupStatus.PENDING);
 
-            backupEntity backup = backupRepo.findByDispatchId(dispatchId);
+        if(isBackupReassignment){
+
+            backupEntity backup = pendingBackup != null ? pendingBackup : backupRepo.findByDispatchId(dispatchId);
             disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
 
             if(disaster == null){
@@ -468,10 +619,13 @@ public class stationServiceImpl implements stationService {
                 disaster.setStatus(Status.BACKUP_FAILED);
                 disasterRepository.save(disaster);
 
-                backup.setStatus(backupStatus.FAILED);
-                backupRepo.save(backup);
+                if (backup != null) {
+                    backup.setStatus(backupStatus.FAILED);
+                    backupRepo.save(backup);
+                }
 
-                dispatch.setStatus(Status.BACKUP_FAILED);
+                // Keep original dispatch active so its mission continues
+                dispatch.setStatus(Status.DISPATCHED);
                 dispatchRepository.save(dispatch);
                 
                 disasterDto dto = new disasterDto();
@@ -498,29 +652,36 @@ public class stationServiceImpl implements stationService {
 
             stationEntity station = stations.get(0);
 
-            dispatch.setStatus(Status.BACKUP_ASSIGNED);
+            // Keep original dispatch active so its mission continues
+            dispatch.setStatus(Status.DISPATCHED);
             dispatchRepository.save(dispatch);
 
-            disaster.setStatus(Status.BACKUP_ASSIGNED);
-            disaster.getStationId().add(station.getStationId());
+            disaster.setStatus(Status.BACKUP_REQUEST);
             disasterRepository.save(disaster);
 
-            backup.setStatus(backupStatus.ASSIGNED);
-            backup.setStationId(station.getStationId());
-            backup.setAssingnedAt(LocalDateTime.now());
-            backupRepo.save(backup);
+            if (backup != null) {
+                backup.setStationId(station.getStationId());
+                backupRepo.save(backup);
+            }
 
             dispatchDto dto = new dispatchDto();
             dto.setDispatchId(dispatch.getDispatchId().toHexString());
             dto.setSeverity(dispatch.getSeverity());
             dto.setForceType(dispatch.getForceType());
-            dto.setAssignedVehicle(backup.getReqVehicles());
-            dto.setAssignedPersonnel(backup.getReqPersonnel());
-            dto.setStatus(dispatch.getStatus());
-            userEntity stationManager = userRepository.findById(station.getUserId()).orElse(null);
+            dto.setAssignedVehicle(backup != null ? backup.getReqVehicles() : 1);
+            dto.setAssignedPersonnel(backup != null ? backup.getReqPersonnel() : 4);
+            dto.setStatus(Status.BACKUP_REQUEST);
+            userEntity stationManager = (station.getUserId() != null) ? userRepository.findById(station.getUserId()).orElse(null) : null;
+            if (stationManager == null && station.getStationId() != null) {
+                stationManager = userRepository.findAll().stream()
+                        .filter(u -> station.getStationId().equals(u.getStationId())
+                                && u.getRoles() != null && u.getRoles().contains("STATION_MANAGER"))
+                        .findFirst().orElse(null);
+            }
             if (stationManager != null && stationManager.getUsername() != null) {
                 messagingTemplate.convertAndSendToUser(stationManager.getUsername(), "/update/mission", dto);
             }
+            messagingTemplate.convertAndSend("/update/mission", dto);
             return;
         }
 
@@ -585,80 +746,98 @@ public class stationServiceImpl implements stationService {
     public ResponseEntity<?> completeMission(ObjectId dispatchId, String username) {
 
         dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
-        userEntity worker = userRepository.findByUsername(username);
-        stationEntity station = stationRepository.findByUserId(worker.getUserId());
+        userEntity manager = userRepository.findByUsername(username);
+        stationEntity station = (manager.getUserId() != null) ? stationRepository.findByUserId(manager.getUserId()) : null;
+        if (station == null && manager.getStationId() != null) {
+            station = stationRepository.findById(manager.getStationId()).orElse(null);
+        }
+        if (station == null) {
+            return ResponseEntity.badRequest().body("Station not found.");
+        }
         resourceEntity resource = resourceRepo.findByStationId(station.getStationId());
+
+        if (!dispatch.getStationId().equals(manager.getStationId())) {
+            return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
+        }
 
         if(dispatch.getStatus() == Status.BACKUP_DISPATCH_COMPLETED){
 
             backupEntity backup = backupRepo.findByDispatchId(dispatchId);            
 
-            if (!dispatch.getStationId().equals(worker.getStationId())){
-                return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
+            int reqP = backup != null && backup.getReqPersonnel() != null ? backup.getReqPersonnel() : (dispatch.getAssignedPersonnel() != null ? dispatch.getAssignedPersonnel() : 0);
+            int reqV = backup != null && backup.getReqVehicles() != null ? backup.getReqVehicles() : (dispatch.getAssignedVehicle() != null ? dispatch.getAssignedVehicle() : 0);
+
+            if (resource != null) {
+                resource.setAvailablePersonnel(resource.getAvailablePersonnel() + reqP);
+                resource.setAvailableVehicle(resource.getAvailableVehicle() + reqV);
+                resourceRepo.save(resource);
             }
 
-            resource.setAvailablePersonnel(resource.getAvailablePersonnel() + backup.getReqPersonnel());
-            resource.setAvailableVehicle(resource.getAvailableVehicle() + backup.getReqVehicles());
-            resourceRepo.save(resource);
-
-            backup.setStatus(backupStatus.COMPLETED);
-            backupRepo.save(backup);
+            if (backup != null) {
+                backup.setStatus(backupStatus.COMPLETED);
+                backupRepo.save(backup);
+            }
 
             dispatch.setStatus(Status.COMPLETED);
             dispatch.setCompletedAt(LocalDateTime.now());
             dispatchRepository.save(dispatch);
 
             disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
-
             if(disaster == null){
                 return ResponseEntity.badRequest().body("Disaster not found.");
             }
 
-            userEntity workerr = userRepository.findById(backup.getWorkerId()).orElseThrow(() -> new RuntimeException("User not found"));
-            workerr.setWorkerStatus(Admin.AVAILABLE);
-            userRepository.save(workerr);
-
-            if(!station.getStationId().equals(backup.getStationId())){
-                stationEntity st = stationRepository.findById(backup.getStationId()).orElseThrow(() -> new RuntimeException("Station not found"));
-                userEntity w = userRepository.findById(st.getUserId()).orElseThrow(() -> new RuntimeException("Station not found"));
-                Stats stats = w.getStats();
-                stats.setCompleted(stats.getCompleted() + 1);
-                stats.setTotalAssigned(stats.getTotalAssigned() + 1);
-                w.setStats(stats);
-                userRepository.save(w);        
+            ObjectId workerId = (backup != null && backup.getWorkerId() != null) ? backup.getWorkerId() : dispatch.getWorkerId();
+            if (workerId != null) {
+                userEntity workerr = userRepository.findById(workerId).orElse(null);
+                if (workerr != null) {
+                    workerr.setWorkerStatus(Admin.AVAILABLE);
+                    userRepository.save(workerr);
+                }
             }
+
+            Stats stats = manager.getStats();
+            if (stats == null) { stats = new Stats(0, 0, 0, 0); }
+            stats.setCompleted(stats.getCompleted() + 1);
+            stats.setTotalAssigned(stats.getTotalAssigned() + 1);
+            manager.setStats(stats);
+            userRepository.save(manager);
 
             completeDisasterBackup(disaster.getDisasterId());
 
             return ResponseEntity.ok("Backup Dispatch completed successfully.");
         }
 
-        if (!dispatch.getStationId().equals(worker.getStationId())){
-            return ResponseEntity.status(403).body("You are not authorized to complete this mission.");
-        }
         if (dispatch.getStatus() != Status.DISPATCH_COMPLETED) {
             return ResponseEntity.badRequest().body("This mission is not in a state that can be completed.");
         }
-        resource.setAvailablePersonnel(resource.getAvailablePersonnel() + dispatch.getAssignedPersonnel());
-        resource.setAvailableVehicle(resource.getAvailableVehicle() + dispatch.getAssignedVehicle());
-        resourceRepo.save(resource);
+
+        if (resource != null) {
+            resource.setAvailablePersonnel(resource.getAvailablePersonnel() + (dispatch.getAssignedPersonnel() != null ? dispatch.getAssignedPersonnel() : 0));
+            resource.setAvailableVehicle(resource.getAvailableVehicle() + (dispatch.getAssignedVehicle() != null ? dispatch.getAssignedVehicle() : 0));
+            resourceRepo.save(resource);
+        }
 
         dispatch.setStatus(Status.COMPLETED);
         dispatch.setCompletedAt(LocalDateTime.now());
         dispatchRepository.save(dispatch);
 
-        userEntity workerr = userRepository.findById(dispatch.getWorkerId()).orElseThrow(() -> new RuntimeException("User not found"));
-        workerr.setWorkerStatus(Admin.AVAILABLE);
-        userRepository.save(workerr);
+        if (dispatch.getWorkerId() != null) {
+            userEntity workerr = userRepository.findById(dispatch.getWorkerId()).orElse(null);
+            if (workerr != null) {
+                workerr.setWorkerStatus(Admin.AVAILABLE);
+                userRepository.save(workerr);
+            }
+        }
 
-        Stats stats = worker.getStats();
+        Stats stats = manager.getStats();
+        if (stats == null) { stats = new Stats(0, 0, 0, 0); }
         stats.setCompleted(stats.getCompleted() + 1);
         stats.setTotalAssigned(stats.getTotalAssigned() + 1);
-        worker.setStats(stats);
-        userRepository.save(worker);
+        manager.setStats(stats);
+        userRepository.save(manager);
         
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
-
         if(disaster == null){
             return ResponseEntity.badRequest().body("Disaster not found.");
         }
@@ -673,42 +852,62 @@ public class stationServiceImpl implements stationService {
     public ResponseEntity<?> fakeMission(ObjectId dispatchId, String username) {
         
         dispatchEntity dispatch = dispatchRepository.findById(dispatchId).orElseThrow(() -> new RuntimeException("Dispatch not found"));
-        userEntity worker = userRepository.findByUsername(username);
-        stationEntity station = stationRepository.findByUserId(worker.getUserId());
+        userEntity manager = userRepository.findByUsername(username);
+        stationEntity station = (manager.getUserId() != null) ? stationRepository.findByUserId(manager.getUserId()) : null;
+        if (station == null && manager.getStationId() != null) {
+            station = stationRepository.findById(manager.getStationId()).orElse(null);
+        }
+        if (station == null) {
+            return ResponseEntity.badRequest().body("Station not found.");
+        }
         resourceEntity resource = resourceRepo.findByStationId(station.getStationId());
 
-        if (!dispatch.getStationId().equals(worker.getStationId())){
+        if (!dispatch.getStationId().equals(manager.getStationId())){
             return ResponseEntity.status(403).body("You are not authorized to mark this mission as fake.");
         }
         if (dispatch.getStatus() != Status.DISPATCH_FALSE) {
             return ResponseEntity.badRequest().body("This mission is not in a state that can be marked as fake.");
         }
 
-        resource.setAvailablePersonnel(resource.getAvailablePersonnel() + dispatch.getAssignedPersonnel());
-        resource.setAvailableVehicle(resource.getAvailableVehicle() + dispatch.getAssignedVehicle());
-        resourceRepo.save(resource);
+        backupEntity backup = backupRepo.findByDispatchId(dispatchId);
+        if (backup != null) {
+            backup.setStatus(backupStatus.FAILED);
+            backupRepo.save(backup);
+        }
+
+        int addP = dispatch.getAssignedPersonnel() != null ? dispatch.getAssignedPersonnel() : (backup != null && backup.getReqPersonnel() != null ? backup.getReqPersonnel() : 0);
+        int addV = dispatch.getAssignedVehicle() != null ? dispatch.getAssignedVehicle() : (backup != null && backup.getReqVehicles() != null ? backup.getReqVehicles() : 0);
+
+        if (resource != null) {
+            resource.setAvailablePersonnel(resource.getAvailablePersonnel() + addP);
+            resource.setAvailableVehicle(resource.getAvailableVehicle() + addV);
+            resourceRepo.save(resource);
+        }
 
         dispatch.setStatus(Status.DISPATCH_CANCELLED);
         dispatch.setCompletedAt(LocalDateTime.now());
         dispatchRepository.save(dispatch);
 
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
-
-        if(disaster == null){
-            return ResponseEntity.badRequest().body("Disaster not found.");
+        if(disaster != null){
+            completeDisasterReject(disaster.getDisasterId());
         }
 
-        completeDisasterReject(disaster.getDisasterId());
+        ObjectId workerId = dispatch.getWorkerId() != null ? dispatch.getWorkerId() : (backup != null ? backup.getWorkerId() : null);
+        if (workerId != null) {
+            userEntity workerr = userRepository.findById(workerId).orElse(null);
+            if (workerr != null) {
+                workerr.setWorkerStatus(Admin.AVAILABLE);
+                userRepository.save(workerr);
+            }
+        }
 
-        userEntity workerr = userRepository.findById(dispatch.getWorkerId()).orElseThrow(() -> new RuntimeException("User not found"));
-        workerr.setWorkerStatus(Admin.AVAILABLE);
-        userRepository.save(workerr);
-
-        Stats stats = worker.getStats();
+        Stats stats = manager.getStats();
+        if (stats == null) { stats = new Stats(0, 0, 0, 0); }
         stats.setMarkedFalse(stats.getMarkedFalse() + 1);
         stats.setTotalAssigned(stats.getTotalAssigned() + 1);
-        worker.setStats(stats);
-        userRepository.save(worker);        
+        manager.setStats(stats);
+        userRepository.save(manager);        
                 
         return ResponseEntity.ok("Dispatch marked as fake successfully.");
     }
@@ -732,6 +931,10 @@ public class stationServiceImpl implements stationService {
             return ResponseEntity.status(403).body("You are not authorized to request backup for this dispatch.");
         }
 
+        if (!hasDispatchArrived(dispatch)) {
+            return ResponseEntity.badRequest().body("Unit has not yet arrived at incident destination.");
+        }
+
         stationEntity station = stationRepository.findById(user.getStationId()).orElseThrow(() -> new RuntimeException("Station not found"));
         disasterEntity disaster = disasterRepository.findByDisasterId(dispatch.getDisasterId());
 
@@ -748,6 +951,7 @@ public class stationServiceImpl implements stationService {
         backup.setReqPersonnel(dto.getReqPersonnel());
         backup.setStatus(backupStatus.PENDING);
         backup.setRequestedAt(LocalDateTime.now());
+        backup.setStationId(station.getStationId());
         backupRepo.save(backup);
 
         dispatch.setStatus(Status.BACKUP_REQUEST);
@@ -764,10 +968,19 @@ public class stationServiceImpl implements stationService {
         dtoo.setAssignedPersonnel(dto.getReqPersonnel());
         dtoo.setStatus(dispatch.getStatus());
 
-        userEntity stationManager = userRepository.findById(station.getUserId()).orElse(null);
+        userEntity stationManager = (station.getUserId() != null)
+                ? userRepository.findById(station.getUserId()).orElse(null)
+                : null;
+        if (stationManager == null && station.getStationId() != null) {
+            stationManager = userRepository.findAll().stream()
+                    .filter(u -> station.getStationId().equals(u.getStationId())
+                            && u.getRoles() != null && u.getRoles().contains("STATION_MANAGER"))
+                    .findFirst().orElse(null);
+        }
         if (stationManager != null && stationManager.getUsername() != null) {
             messagingTemplate.convertAndSendToUser(stationManager.getUsername(), "/update/mission", dtoo);
         }
+        messagingTemplate.convertAndSend("/update/mission", dtoo);
         return ResponseEntity.ok("Backup request sent successfully.");
     }
 
@@ -775,8 +988,12 @@ public class stationServiceImpl implements stationService {
     public ResponseEntity<dispatches> getAssignedDispatches(String username) {
         
         userEntity worker = userRepository.findByUsername(username);
-        List<dispatchEntity> dispatchEntities = dispatchRepository.findByWorkerIdAndStatus(worker.getUserId(),Status.DISPATCH_ASSIGNED);
-        List<backupEntity> backupEntities = backupRepo.findByWorkerIdAndStatus(worker.getUserId(),backupStatus.ASSIGNED);
+        List<dispatchEntity> dispatchEntities = dispatchRepository.findByWorkerIdAndStatusIn(
+                worker.getUserId(),
+                List.of(Status.DISPATCH_ASSIGNED, Status.DISPATCHED, Status.BACKUP_REQUEST, Status.BACKUP_ASSIGNED, Status.BACKUP_DISPATCHED));
+        List<backupEntity> backupEntities = backupRepo.findByWorkerIdAndStatusIn(
+                worker.getUserId(),
+                List.of(backupStatus.ASSIGNED, backupStatus.DISPATCHED));
         List<dispatchDto> dispatchDtos = new ArrayList<>();
         for (dispatchEntity dispatch : dispatchEntities) {
             dispatchDto dto = new dispatchDto();
@@ -786,6 +1003,7 @@ public class stationServiceImpl implements stationService {
             dto.setAssignedVehicle(dispatch.getAssignedVehicle());
             dto.setAssignedPersonnel(dispatch.getAssignedPersonnel());
             dto.setStatus(dispatch.getStatus());
+            dto.setArrived(hasDispatchArrived(dispatch));
             dispatchDtos.add(dto);
         }
         List<dtoBackup> backupDtos = new ArrayList<>();
@@ -1017,6 +1235,10 @@ public class stationServiceImpl implements stationService {
         // 4. Only dispatches that are actively moving may be recalled
         if (dispatch.getStatus() != Status.DISPATCHED && dispatch.getStatus() != Status.BACKUP_DISPATCHED) {
             return ResponseEntity.badRequest().body("Recall is only allowed for dispatches that are currently DISPATCHED or BACKUP_DISPATCHED.");
+        }
+
+        if (!hasDispatchArrived(dispatch)) {
+            return ResponseEntity.badRequest().body("Unit has not yet arrived at incident destination.");
         }
 
         // 5. Prevent duplicate pending recall requests for the same dispatch
@@ -1298,5 +1520,67 @@ public class stationServiceImpl implements stationService {
         }
 
         return ResponseEntity.ok("Recall request rejected. The dispatch continues its current lifecycle.");
+    }
+
+    private recallRequestDto mapToRecallDto(recallRequestEntity recall) {
+        if (recall == null) return null;
+        String stationName = "Unknown Station";
+        if (recall.getStationId() != null) {
+            stationEntity station = stationRepository.findById(recall.getStationId()).orElse(null);
+            if (station != null && station.getStationName() != null) {
+                stationName = station.getStationName();
+            }
+        }
+        Status dStatus = null;
+        if (recall.getDispatchId() != null) {
+            dispatchEntity dispatch = dispatchRepository.findById(recall.getDispatchId()).orElse(null);
+            if (dispatch != null) {
+                dStatus = dispatch.getStatus();
+            }
+        }
+        return new recallRequestDto(
+                recall.getRecallId() != null ? recall.getRecallId().toHexString() : null,
+                recall.getDispatchId() != null ? recall.getDispatchId().toHexString() : null,
+                recall.getDisasterId() != null ? recall.getDisasterId().toHexString() : null,
+                recall.getStationId() != null ? recall.getStationId().toHexString() : null,
+                stationName,
+                recall.getForceType(),
+                recall.getRequestingWorkerUsername(),
+                recall.getReason(),
+                recall.getRequestedAt(),
+                recall.getStatus(),
+                dStatus
+        );
+    }
+
+    @Override
+    public ResponseEntity<?> getPendingRecallsForManager(String username) {
+        userEntity manager = userRepository.findByUsername(username);
+        if (manager == null) {
+            return ResponseEntity.status(404).body("Manager not found.");
+        }
+        if (manager.getStationId() == null) {
+            return ResponseEntity.ok(java.util.Collections.emptyList());
+        }
+        List<recallRequestEntity> pendingRecalls = recallRequestRepository
+                .findByStationIdAndStatus(manager.getStationId(), recallStatus.PENDING);
+        List<recallRequestDto> dtos = pendingRecalls.stream()
+                .map(this::mapToRecallDto)
+                .toList();
+        return ResponseEntity.ok(dtos);
+    }
+
+    @Override
+    public ResponseEntity<?> getActiveRecallsForWorker(String username) {
+        userEntity worker = userRepository.findByUsername(username);
+        if (worker == null) {
+            return ResponseEntity.status(404).body("Worker not found.");
+        }
+        List<recallRequestEntity> workerRecalls = recallRequestRepository
+                .findByRequestingWorkerUsername(username);
+        List<recallRequestDto> dtos = workerRecalls.stream()
+                .map(this::mapToRecallDto)
+                .toList();
+        return ResponseEntity.ok(dtos);
     }
 }

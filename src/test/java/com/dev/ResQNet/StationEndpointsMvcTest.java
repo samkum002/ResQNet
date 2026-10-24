@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -138,7 +139,7 @@ class StationEndpointsMvcTest {
                 .when(stationService)
                 .approveRecall("manager", recallId);
 
-        mvc.perform(patch("/station/recall/{recallId}/approve", recallId.toHexString()))
+        mvc.perform(patch("/station/recall/{recallId}/approve", recallId.toHexString()).with(csrf()))
                 .andExpect(status().isOk());
 
         verify(stationService).approveRecall("manager", recallId);
@@ -153,7 +154,7 @@ class StationEndpointsMvcTest {
                 .when(stationService)
                 .rejectRecall("manager", recallId);
 
-        mvc.perform(patch("/station/recall/{recallId}/reject", recallId.toHexString()))
+        mvc.perform(patch("/station/recall/{recallId}/reject", recallId.toHexString()).with(csrf()))
                 .andExpect(status().isOk());
 
         verify(stationService).rejectRecall("manager", recallId);

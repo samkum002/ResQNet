@@ -125,4 +125,15 @@ public class stationController {
         return stationservice.rejectRecall(username, recallId);
     }
 
+    /**
+     * Get all pending recall requests for the station managed by the authenticated manager.
+     * GET /station/recall/pending
+     */
+    @GetMapping("/recall/pending")
+    public ResponseEntity<?> getPendingRecalls() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth.getName();
+        return stationservice.getPendingRecallsForManager(username);
+    }
+
 }

@@ -1,0 +1,468 @@
+.worker-dash-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deepest);
+  color: var(--text-primary);
+}
+
+.worker-dash-main {
+  flex: 1;
+  max-width: 1300px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 28px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.worker-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.worker-heading {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.worker-subheading {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+/* ── Dismissible Decision Banner ── */
+.decision-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  gap: 16px;
+}
+
+.decision-approved {
+  background: rgba(0, 229, 160, 0.12);
+  border: 1px solid var(--success);
+}
+
+.decision-rejected {
+  background: rgba(255, 75, 31, 0.12);
+  border: 1px solid var(--orange);
+}
+
+.decision-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.decision-text h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.decision-text p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 3px;
+  line-height: 1.4;
+}
+
+.btn-decision-ok {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-decision-ok:hover {
+  background: #fff;
+  color: #030a14;
+}
+
+/* ── Worker Missions Grid ── */
+.worker-missions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+}
+
+.worker-mission-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.worker-mission-card:hover {
+  border-color: rgba(0, 212, 255, 0.35);
+}
+
+.pending-recall-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 75, 31, 0.1);
+  border: 1px solid rgba(255, 75, 31, 0.3);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #ff9179;
+}
+
+.worker-actions-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.btn-start-mission {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: linear-gradient(135deg, var(--cyan-dim) 0%, #0084a8 100%);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13.5px;
+  font-weight: 700;
+  padding: 11px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 10px var(--cyan-glow);
+}
+
+.btn-start-mission:hover:not(:disabled) {
+  opacity: 0.92;
+  box-shadow: 0 4px 18px var(--cyan-glow);
+}
+
+.in-progress-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-row-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.btn-worker-complete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(0, 229, 160, 0.12);
+  border: 1px solid rgba(0, 229, 160, 0.3);
+  border-radius: 8px;
+  color: var(--success);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-worker-complete:hover:not(:disabled) {
+  background: var(--success);
+  color: #030a14;
+}
+
+.btn-worker-false {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255, 61, 61, 0.1);
+  border: 1px solid rgba(255, 61, 61, 0.25);
+  border-radius: 8px;
+  color: #ff7272;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-worker-false:hover:not(:disabled) {
+  background: rgba(255, 61, 61, 0.25);
+  color: #fff;
+}
+
+.btn-worker-backup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  color: var(--cyan);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-worker-backup:hover:not(:disabled) {
+  background: rgba(0, 212, 255, 0.18);
+  color: #fff;
+}
+
+.btn-worker-recall {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: rgba(255, 75, 31, 0.08);
+  border: 1px solid rgba(255, 75, 31, 0.25);
+  border-radius: 8px;
+  color: #ff8c72;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-worker-recall:hover:not(:disabled) {
+  background: var(--orange);
+  color: #fff;
+}
+
+.btn-worker-complete:disabled,
+.btn-worker-false:disabled,
+.btn-worker-backup:disabled,
+.btn-worker-recall:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mission-active-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 212, 255, 0.08);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: var(--radius-sm);
+  color: var(--cyan);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+/* ── Backup Grid ── */
+.backup-missions-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.backup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.backup-card {
+  background: rgba(4, 14, 32, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.backup-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.backup-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.backup-body {
+  display: flex;
+  gap: 16px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+/* ── Modal ── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: rgba(2, 6, 14, 0.85);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 12px;
+}
+
+.modal-header h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.btn-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.btn-modal-close:hover {
+  color: #fff;
+}
+
+.modal-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.form-group input, .form-group textarea {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13.5px;
+  outline: none;
+}
+
+.form-group input:focus, .form-group textarea:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px var(--cyan-glow);
+}
+
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.btn-modal-cancel {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-modal-cancel:hover {
+  color: #fff;
+}
+
+.btn-modal-submit {
+  background: linear-gradient(135deg, var(--cyan-dim) 0%, #0084a8 100%);
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-modal-submit.btn-submit-recall {
+  background: linear-gradient(135deg, var(--orange) 0%, #d8340d 100%);
+}
+
+.btn-modal-submit:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .worker-missions-grid {
+    grid-template-columns: 1fr;
+  }
+}

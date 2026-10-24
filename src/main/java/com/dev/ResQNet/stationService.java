@@ -45,4 +45,14 @@ public interface stationService {
      * @param recallId the recall request to reject
      */
     ResponseEntity<?> rejectRecall(String username, ObjectId recallId);
+
+    /**
+     * Get all pending recall requests for the station managed by the specified manager.
+     */
+    ResponseEntity<?> getPendingRecallsForManager(String username);
+
+    /**
+     * Get active (e.g. PENDING) recall requests submitted by the specified worker.
+     */
+    ResponseEntity<?> getActiveRecallsForWorker(String username);
 }

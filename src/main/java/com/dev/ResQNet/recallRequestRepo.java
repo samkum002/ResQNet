@@ -16,4 +16,10 @@ public interface recallRequestRepo extends MongoRepository<recallRequestEntity, 
 
     /** All recall requests associated with a station. */
     List<recallRequestEntity> findByStationId(ObjectId stationId);
+
+    /** All recall requests associated with a station by status. */
+    List<recallRequestEntity> findByStationIdAndStatus(ObjectId stationId, recallStatus status);
+
+    /** All recall requests submitted by a specific worker. */
+    List<recallRequestEntity> findByRequestingWorkerUsername(String requestingWorkerUsername);
 }

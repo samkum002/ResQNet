@@ -30,6 +30,7 @@ public class DispatchSimulationService {
     private static final int MAX_ROUTE_POINTS = 10000;
     private static final double MAX_ENDPOINT_DISTANCE_METERS = 2000;
     private static final double SIMULATED_SPEED_METERS_PER_SECOND = 12.0;
+    private static final double TARGET_SIMULATION_DURATION_SECONDS = 210.0;
     private static final Duration TICK_INTERVAL = Duration.ofSeconds(2);
     private static final long USERNAME_CACHE_TTL_NANOS =
             Duration.ofMinutes(5).toNanos();
@@ -272,7 +273,8 @@ public class DispatchSimulationService {
             }
 
             if (dispatch.getStatus() != Status.DISPATCHED
-                    && dispatch.getStatus() != Status.BACKUP_DISPATCHED) {
+                    && dispatch.getStatus() != Status.BACKUP_DISPATCHED
+                    && dispatch.getStatus() != Status.BACKUP_REQUEST) {
                 deactivate(dispatch);
                 stop(dispatchId);
                 return;
@@ -300,9 +302,13 @@ public class DispatchSimulationService {
                 return;
             }
 
+            double totalRouteDistance = calculateTotalRouteDistance(points);
+            double speed = totalRouteDistance > 0
+                    ? Math.max(10.0, totalRouteDistance / TARGET_SIMULATION_DURATION_SECONDS)
+                    : SIMULATED_SPEED_METERS_PER_SECOND;
+
             double remainingMeters =
-                    SIMULATED_SPEED_METERS_PER_SECOND
-                            * TICK_INTERVAL.toMillis() / 1000.0;
+                    speed * TICK_INTERVAL.toMillis() / 1000.0;
 
             while (remainingMeters > 0 && targetIndex < points.size()) {
                 List<Double> target = points.get(targetIndex);
@@ -520,6 +526,20 @@ public class DispatchSimulationService {
                 log.warn("Location broadcast failed for reporter {}", reporterId, ex);
             }
         }
+
+        if (dispatch.getWorkerId() != null) {
+            String workerUsername = findReporterUsername(dispatch.getWorkerId());
+            if (workerUsername != null && !workerUsername.isBlank()) {
+                try {
+                    messagingTemplate.convertAndSendToUser(
+                            workerUsername,
+                            "/new/location",
+                            update);
+                } catch (Exception ex) {
+                    log.warn("Location broadcast failed for worker {}", workerUsername, ex);
+                }
+            }
+        }
     }
 
     private String findReporterUsername(ObjectId reporterId) {
@@ -626,7 +646,8 @@ public class DispatchSimulationService {
                 if (dispatch.getDispatchId() == null
                         || !isValidRoute(dispatch.getRoutePoints())
                         || (dispatch.getStatus() != Status.DISPATCHED
-                        && dispatch.getStatus() != Status.BACKUP_DISPATCHED)) {
+                        && dispatch.getStatus() != Status.BACKUP_DISPATCHED
+                        && dispatch.getStatus() != Status.BACKUP_REQUEST)) {
                     deactivate(dispatch);
                     continue;
                 }
@@ -670,6 +691,21 @@ public class DispatchSimulationService {
                 }
             }
         }
+    }
+
+    private double calculateTotalRouteDistance(List<List<Double>> points) {
+        if (points == null || points.size() < 2) {
+            return 0.0;
+        }
+        double total = 0.0;
+        for (int i = 0; i < points.size() - 1; i++) {
+            List<Double> p1 = points.get(i);
+            List<Double> p2 = points.get(i + 1);
+            if (p1 != null && p1.size() >= 2 && p2 != null && p2.size() >= 2) {
+                total += distanceMeters(p1.get(1), p1.get(0), p2.get(1), p2.get(0));
+            }
+        }
+        return total;
     }
 
     private double distanceMeters(

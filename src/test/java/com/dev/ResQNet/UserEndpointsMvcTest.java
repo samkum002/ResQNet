@@ -37,6 +37,9 @@ class UserEndpointsMvcTest {
     private userRepo userRepository;
 
     @MockitoBean
+    private stationRepo stationRepository;
+
+    @MockitoBean
     private MongoDatabaseFactory mongoDatabaseFactory;
 
     @Test

@@ -1,0 +1,102 @@
+/* ============================================================
+   ResQNet Global Styles
+   Command-center aesthetic: deep navy, emergency orange, cyan
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Backgrounds */
+  --bg-deepest:   #030a14;
+  --bg-dark:      #060f1e;
+  --bg-surface:   #0a1628;
+  --bg-elevated:  #0e2040;
+  --bg-card:      rgba(8, 22, 48, 0.88);
+
+  /* Accent colors */
+  --orange:       #ff4b1f;
+  --orange-light: #ff6b35;
+  --orange-glow:  rgba(255, 75, 31, 0.35);
+  --cyan:         #00d4ff;
+  --cyan-dim:     #00a8cc;
+  --cyan-glow:    rgba(0, 212, 255, 0.18);
+  --teal:         #0ea5e9;
+
+  /* Text */
+  --text-primary:   #ddeeff;
+  --text-secondary: #7aafd6;
+  --text-muted:     #3d6080;
+
+  /* Borders */
+  --border-subtle:  rgba(0, 170, 230, 0.10);
+  --border-default: rgba(0, 170, 230, 0.20);
+  --border-focus:   rgba(0, 212, 255, 0.55);
+
+  /* States */
+  --error:      #ff3d3d;
+  --error-bg:   rgba(255, 61, 61, 0.10);
+  --success:    #00e5a0;
+  --success-bg: rgba(0, 229, 160, 0.10);
+  --warning:    #ffb347;
+
+  /* Input */
+  --input-bg:     rgba(4, 14, 32, 0.75);
+  --input-border: rgba(0, 140, 210, 0.20);
+}
+
+html, body, #root {
+  height: 100%;
+  min-height: 100vh;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  background: var(--bg-dark);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: var(--cyan);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: var(--cyan-dim);
+}
+
+/* Focus ring — accessible for command center dark theme */
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

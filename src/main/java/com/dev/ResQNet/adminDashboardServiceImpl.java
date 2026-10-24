@@ -40,11 +40,17 @@ public class adminDashboardServiceImpl implements adminDashboardService{
 
     @Autowired
     private stationService stationservice;
+
+    @Autowired
+    private ReverseGeocodingService reverseGeocoding;
     
     @Override
     public void checkInfo(ObjectId disasterId){
         disasterEntity entity = DisasterRepo.findByDisasterId(disasterId);
-        if(entity.getAiStatus()==AI.COMPLETED&&entity.getState()!=null){
+        if(entity != null && entity.getAiStatus() == AI.COMPLETED){
+            if (entity.getState() == null && entity.getLocation() != null) {
+                reverseGeocoding.findAndSaveState(entity, entity.getLocation().getY(), entity.getLocation().getX());
+            }
             findAdmin(disasterId);
         }
     }
@@ -57,7 +63,14 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         entity.setAssignmentStatus(Assignment.PROCESSING);
         List<userEntity> admins = dashboardRepo.findByRolesContainingAndAdminStateAndAdminStatus("ADMIN",entity.getState(),Admin.AVAILABLE);
         if(admins.isEmpty()){
+            admins = dashboardRepo.findByRolesContainingAndAdminStatus("ADMIN", Admin.AVAILABLE);
+        }
+        if(admins.isEmpty()){
+            admins = dashboardRepo.findByRolesContaining("ADMIN");
+        }
+        if(admins.isEmpty()){
             entity.setAssignmentStatus(Assignment.TIMEOUT);
+            entity.setStatus(Status.UNDER_REVIEW);
             DisasterRepo.save(entity);
             return;
         }
@@ -99,7 +112,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
     public void reassignDisaster(){
         List<disasterEntity> disasters = DisasterRepo.findByAssignmentStatus(Assignment.ASSIGNED);
         for(disasterEntity entity : disasters){
-            if(entity.getAssignedAt().plusMinutes(3).isBefore(LocalDateTime.now())){
+            if(entity.getAssignedAt() != null && entity.getAssignedAt().plusMinutes(3).isBefore(LocalDateTime.now())){
                 entity.setAssignmentStatus(Assignment.TIMEOUT);
                 DisasterRepo.save(entity);
             }
@@ -123,15 +136,30 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             dto.setReportCount(entity.getReportCount());
             ObjectId adminId = entity.getAssignedAdminId();
             List<userEntity> admins = dashboardRepo.findByRolesContainingAndAdminState("ADMIN", entity.getState());
-            List<userEntity> filteredAdmins = admins.stream().filter(admin->admin.getAdminStatus()!=Admin.OFFLINE).toList();
-            for(userEntity admin : filteredAdmins){
-                if(!admin.getUserId().equals(adminId)){
-                    entity.setAssignmentStatus(Assignment.REASSIGNED);
-                    entity.setAssignedAt(LocalDateTime.now());
-                    DisasterRepo.save(entity);
-                    dto.setAssignmentStatus(entity.getAssignmentStatus());
-                    template.convertAndSendToUser(admin.getUsername(), "/topic/disaster", dto);
+            if(admins.isEmpty()){
+                admins = dashboardRepo.findByRolesContaining("ADMIN");
+            }
+            List<userEntity> filteredAdmins = admins.stream()
+                .filter(admin -> admin.getAdminStatus() != Admin.OFFLINE && (adminId == null || !admin.getUserId().equals(adminId)))
+                .sorted(Comparator.comparingInt(userEntity::getActiveIncidents))
+                .toList();
+
+            if (!filteredAdmins.isEmpty()) {
+                userEntity chosenAdmin = filteredAdmins.get(0);
+                entity.setAssignedAdminId(chosenAdmin.getUserId());
+                entity.setStatus(Status.UNDER_REVIEW);
+                entity.setAssignmentStatus(Assignment.REASSIGNED);
+                entity.setAssignedAt(LocalDateTime.now());
+                chosenAdmin.setActiveIncidents(chosenAdmin.getActiveIncidents() + 1);
+                if (chosenAdmin.getActiveIncidents() > 3) {
+                    chosenAdmin.setAdminStatus(Admin.BUSY);
                 }
+                DisasterRepo.save(entity);
+                userrepo.save(chosenAdmin);
+
+                dto.setStatus(entity.getStatus());
+                dto.setAssignmentStatus(entity.getAssignmentStatus());
+                template.convertAndSendToUser(chosenAdmin.getUsername(), "/topic/disaster", dto);
             }
         }
     }
@@ -150,45 +178,87 @@ public class adminDashboardServiceImpl implements adminDashboardService{
     }
 
     @Override
-    public boolean checkDuplicateDisasters(double latitude,double longitude,String state,ObjectId disasterId){
+    public boolean checkDuplicateDisasters(double latitude, double longitude, String state, ObjectId disasterId) {
         LocalDateTime ctf = LocalDateTime.now().minusHours(24);
         Query query = new Query();
-        query.addCriteria(Criteria.where("state").is(state));
+        if (state != null && !state.isBlank()) {
+            query.addCriteria(new Criteria().orOperator(
+                    Criteria.where("state").is(state),
+                    Criteria.where("state").is(null),
+                    Criteria.where("state").exists(false)
+            ));
+        }
         query.addCriteria(Criteria.where("createdAt").gte(ctf));
-        query.addCriteria(Criteria.where("status").in(Status.UNDER_REVIEW,Status.AI_PROGRESS,Status.BACKUP_DISPATCHED,Status.DISPATCHED,Status.REPORTED,Status.VERIFIED,Status.COMPLETED));
-        query.addCriteria(Criteria.where("location").nearSphere(new GeoJsonPoint(longitude, latitude)).maxDistance(500.0/6378137.0));
-        List<disasterEntity> disasters = mongoTemplate.find(query,disasterEntity.class);
-        if(disasters.isEmpty()){
+
+        // Eligible statuses for duplicate matching: active in-progress and completed disasters.
+        // Exclude ALREADY_PRESENT (duplicates themselves), and cancelled/fake disasters.
+        List<Status> eligibleStatuses = List.of(
+                Status.REPORTED, Status.AI_PROGRESS, Status.UNDER_REVIEW, Status.VERIFIED,
+                Status.DISPATCH_ASSIGNED, Status.DISPATCHED, Status.BACKUP_REQUEST,
+                Status.BACKUP_ASSIGNED, Status.BACKUP_DISPATCHED, Status.DISPATCH_COMPLETED,
+                Status.BACKUP_DISPATCH_COMPLETED, Status.COMPLETED
+        );
+        query.addCriteria(Criteria.where("status").in(eligibleStatuses));
+
+        // Disaster location is indexed with GEO_2DSPHERE GeoJsonPoint, which requires distance in METERS (500m)
+        query.addCriteria(Criteria.where("location").nearSphere(new GeoJsonPoint(longitude, latitude)).maxDistance(500.0));
+
+        List<disasterEntity> disasters = mongoTemplate.find(query, disasterEntity.class);
+        if (disasters.isEmpty()) {
             return false;
         }
+
         disasterEntity dnew = DisasterRepo.findByDisasterId(disasterId);
-        for(disasterEntity entity : disasters){
-            if(entity.getUserReport().equalsIgnoreCase(dnew.getUserReport())&&!entity.getDisasterId().equals(dnew.getDisasterId())){
-                entity.setReportCount(entity.getReportCount()+1);
-                DisasterRepo.save(entity);
-                calculateFinalVal(entity.getDisasterId());
+        if (dnew == null || dnew.getUserReport() == null) {
+            return false;
+        }
+
+        for (disasterEntity entity : disasters) {
+            if (entity.getDisasterId().equals(dnew.getDisasterId())) {
+                continue;
+            }
+
+            if (entity.getUserReport() != null && entity.getUserReport().trim().equalsIgnoreCase(dnew.getUserReport().trim())) {
+                // Ensure duplicate links to the root original disaster
+                ObjectId rootTargetId = (entity.getLinkedDisasterId() != null)
+                        ? entity.getLinkedDisasterId()
+                        : entity.getDisasterId();
+                disasterEntity rootDisaster = DisasterRepo.findByDisasterId(rootTargetId);
+                if (rootDisaster == null) {
+                    rootDisaster = entity;
+                }
+
+                rootDisaster.setReportCount((rootDisaster.getReportCount() != null ? rootDisaster.getReportCount() : 1) + 1);
+                DisasterRepo.save(rootDisaster);
+                calculateFinalVal(rootDisaster.getDisasterId());
+
                 dnew.setStatus(Status.ALREADY_PRESENT);
                 dnew.setAssignmentStatus(Assignment.ASSIGNED);
-                dnew.setAssignedAdminId(entity.getAssignedAdminId());
-                dnew.setLinkedDisasterId(entity.getDisasterId());
+                dnew.setAssignedAdminId(rootDisaster.getAssignedAdminId());
+                dnew.setLinkedDisasterId(rootDisaster.getDisasterId());
                 DisasterRepo.save(dnew);
+
                 duplicateDisasterDto dto = new duplicateDisasterDto();
-                dto.setDisasterId(entity.getDisasterId());
-                dto.setReportCount(entity.getReportCount());
-                dto.setFinalConfidence(entity.getFinalConfidence());
-                userEntity assignedAdmin = userrepo.findByUserId(dnew.getAssignedAdminId());
-                if (assignedAdmin != null && assignedAdmin.getUsername() != null) {
-                    template.convertAndSendToUser(assignedAdmin.getUsername(), "/topic/disaster", dto);
+                dto.setDisasterId(rootDisaster.getDisasterId());
+                dto.setReportCount(rootDisaster.getReportCount());
+                dto.setFinalConfidence(rootDisaster.getFinalConfidence());
+
+                if (dnew.getAssignedAdminId() != null) {
+                    userEntity assignedAdmin = userrepo.findByUserId(dnew.getAssignedAdminId());
+                    if (assignedAdmin != null && assignedAdmin.getUsername() != null) {
+                        template.convertAndSendToUser(assignedAdmin.getUsername(), "/topic/disaster", dto);
+                    }
                 }
+                template.convertAndSend("/topic/disaster", dto);
+
                 userEntity duplicateReporter = userrepo.findByUserId(dnew.getUserId());
-                reportResponse dupMsg = entity.getStatus() == Status.COMPLETED
-                        ? new reportResponse(dnew.getDisasterId().toHexString(), "Disaster is already reported and completed.", entity.getStatus())
-                        : new reportResponse(dnew.getDisasterId().toHexString(), "Disaster is already reported.", entity.getStatus());
+                reportResponse dupMsg = rootDisaster.getStatus() == Status.COMPLETED
+                        ? new reportResponse(dnew.getDisasterId().toHexString(), "Disaster is already reported and completed.", rootDisaster.getStatus())
+                        : new reportResponse(dnew.getDisasterId().toHexString(), "Disaster is already reported.", rootDisaster.getStatus());
                 if (duplicateReporter != null && duplicateReporter.getUsername() != null) {
                     template.convertAndSendToUser(duplicateReporter.getUsername(), "/queue/report", dupMsg);
                 }
                 return true;
-
             }
         }
         return false;
@@ -196,7 +266,20 @@ public class adminDashboardServiceImpl implements adminDashboardService{
 
     @Override
     public ResponseEntity<adminDashboard> disasterList(ObjectId userId){
-        List<disasterEntity> disasters = DisasterRepo.findByAssignedAdminIdAndStatus(userId,Status.UNDER_REVIEW);
+        userEntity user = userrepo.findByUserId(userId);
+        if (user != null && user.getAdminState() != null) {
+            List<disasterEntity> unassigned = DisasterRepo.findByAssignmentStatusAndState(Assignment.TIMEOUT, user.getAdminState());
+            for (disasterEntity un : unassigned) {
+                un.setAssignedAdminId(userId);
+                un.setStatus(Status.UNDER_REVIEW);
+                un.setAssignmentStatus(Assignment.ASSIGNED);
+                un.setAssignedAt(LocalDateTime.now());
+                DisasterRepo.save(un);
+                user.setActiveIncidents(user.getActiveIncidents() + 1);
+                userrepo.save(user);
+            }
+        }
+        List<disasterEntity> disasters = DisasterRepo.findByAssignedAdminIdAndStatus(userId, Status.UNDER_REVIEW);
         List<disasterDto> dtos = new ArrayList<>();
         for(disasterEntity entity : disasters){
             disasterDto dto = new disasterDto();
@@ -216,8 +299,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
             dto.setUserReport(entity.getUserReport());
             dtos.add(dto);
         }
-        userEntity user = userrepo.findByUserId(userId);
-        Stats stats = user.getStats();
+        Stats stats = user != null ? user.getStats() : null;
         return ResponseEntity.ok(new adminDashboard(stats, dtos));
     }
 
@@ -268,6 +350,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         Integer newTrucks = (int) Math.ceil((trucks*multiplier));
         Integer newPersonnel = (int) Math.ceil((personnel*multiplier));
         disaster.setStatus(Status.VERIFIED);
+        disaster.setAssignmentStatus(Assignment.APPROVED);
         DisasterRepo.save(disaster);
         stationservice.findStation(disasterId, newTrucks, newPersonnel);
         template.convertAndSendToUser(user.getUsername(), "/queue/report", new reportResponse(disaster.getDisasterId().toHexString(), "Disaster is verified.",disaster.getStatus()));
@@ -284,6 +367,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         if(disaster.getStatus() == Status.VERIFIED || disaster.getStatus() == Status.REJECTED){
             return ResponseEntity.badRequest().body("Disaster has already been processed.");
         }
+        disaster.setAssignmentStatus(Assignment.REJECTED);
         disaster.setStatus(Status.REJECTED);
         DisasterRepo.save(disaster);
         userEntity user = userrepo.findByUserId(disaster.getUserId());
