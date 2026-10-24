@@ -186,6 +186,7 @@ Other implemented states include `ALREADY_PRESENT`, `DISPATCH_FAILED`, `DISPATCH
 | Route geometry | Public OSRM routing service |
 | Reverse geocoding | OpenStreetMap Nominatim |
 | Backend build | Maven Wrapper |
+| Testing | Spring Boot Test, JUnit, Spring Security Test, Spring MVC Test, Spring Data MongoDB Test, Spring WebSocket Test |
 
 The listed backend versions come from the uploaded README's project-file inspection. Frontend dependencies use the declared manifest ranges, with resolved versions recorded in the lockfile. They describe the project configuration, not a deployed production environment.
 
