@@ -1,207 +1,321 @@
-# ResQNet
+# ResQNet — AI-Assisted Disaster Management & Emergency Response
 
-ResQNet is a disaster-management application built to connect public incident reporting with command-center review and coordinated field response. People can submit a report with a photograph and location; administrators review it, emergency stations assign available resources, and field workers receive and operate dispatches. The project combines a Spring Boot backend, a React dashboard, MongoDB persistence, AI-assisted image assessment, geospatial queries, and real-time updates.
+ResQNet is a role-based disaster-management application that connects public incident reporting with administrative review, emergency-station coordination, and field-worker dispatch operations.
 
-> **Scope:** ResQNet is a software project, not an emergency service. Its AI assessments, public routing/geocoding integrations, and simulated vehicle movement are not substitutes for verified emergency-response procedures.
+Built with **Java, Spring Boot, MongoDB, React, and Spring AI**, the system combines image-assisted incident assessment, geospatial queries, resource allocation, route-based vehicle simulation, and real-time communication to model an end-to-end emergency-response workflow.
 
-## Problem and approach
+> **Project scope:** ResQNet is a software project, not an emergency service. AI assessments, public routing and geocoding services, and simulated vehicle movement are not substitutes for verified emergency-response procedures.
 
-During a disaster, reports can be incomplete, repeated, or difficult to route to the right response team. ResQNet implements a role-based workflow to collect photo-and-location reports, identify likely duplicates, assist review with image analysis, and move approved incidents through station and worker dispatch operations. Separate dashboards expose the relevant work to reporters, administrators, station managers, and field workers.
+## Overview
 
-The system records workflow state and resource assignments in MongoDB. HTTP endpoints handle user actions, while STOMP over WebSocket delivers report, mission, and simulated-location updates to connected dashboards.
+Disaster-response coordination involves more than collecting incident reports. Reports may be incomplete or duplicated, incidents require review, stations have limited resources, and response teams need clear assignment and status updates.
 
-## Implemented features
+ResQNet implements a workflow connecting these activities through role-specific dashboards and a Spring Boot backend. MongoDB stores application state, while HTTP APIs handle user actions and STOMP over WebSocket supports real-time dashboard updates.
 
-- **Incident reporting:** authenticated users submit an image, coordinates, and a one-word alphabetic incident label; reports and image files are persisted separately using MongoDB and GridFS.
-- **AI-assisted assessment:** the backend sends report images to Google Gemini for structured estimates of confidence, severity, disaster type, and response forces. Administrators remain responsible for review and approval.
-- **Duplicate linking:** reports from the previous 24 hours are matched against nearby active or completed incidents within 500 metres when the trimmed report labels match without regard to case. A match links the new report to the existing incident and increments its report count.
-- **Administrative review:** administrators receive assigned incidents, can edit assessment fields, and approve or reject reports. Assignment prefers available administrators with lower active-incident counts; unclaimed assignments are reconsidered after three minutes.
-- **Station dispatch:** approval creates force-specific dispatches for nearby active stations. Station managers check available vehicles, personnel, and workers before assigning a worker and reserving resources.
-- **Worker operations:** workers can start an assigned dispatch, follow its simulated route, report completion or a false alarm, and request backup or recall.
-- **Backup and recall workflows:** station managers review backup and recall requests; approved backup requests create a separate dispatch, while approved recalls stop the simulation and restore the relevant station resources.
-- **Map and live updates:** the user dashboard displays station locations and incident/vehicle locations on a Leaflet map. STOMP messages update report status, station missions, worker missions, and dispatch locations.
-- **Authentication and CSRF protection:** form-based session login, BCrypt password hashing, role-restricted HTTP routes, and CSRF tokens are configured with Spring Security.
+### Key features
+
+- **Incident reporting:** Submit incident photographs, geographic coordinates, and a short incident label.
+- **AI-assisted assessment:** Use Google Gemini through Spring AI to estimate incident confidence, severity, disaster type, and required response forces.
+- **Duplicate detection:** Identify matching reports within a geographic and time window, link them to existing incidents, and update report counts.
+- **Administrative review:** Review AI-assisted assessments and approve or reject incidents.
+- **Geospatial station assignment:** Find nearby active stations matching the required response force.
+- **Resource management:** Check vehicle, personnel, and worker availability before assigning a mission.
+- **Dispatch lifecycle:** Assign missions to field workers and track their status through a route-based simulation.
+- **Backup and recall:** Support station-manager review of backup and recall requests.
+- **Real-time updates:** Deliver report, mission, status, and simulated-location updates through WebSocket/STOMP.
+- **Role-based access control:** Separate the responsibilities of users, administrators, station managers, and workers.
+
+## User roles
+
+| Role | Responsibilities |
+|---|---|
+| `USER` | Submit incident reports and view report status and related dispatch updates. |
+| `ADMIN` | Review incident assessments, manage review decisions, and monitor incident information. |
+| `STATION_MANAGER` | Review station missions, allocate resources, and confirm mission completion or false alarms. |
+| `WORKER` | Operate assigned dispatches, follow simulated routes, and submit backup or recall requests. |
+
+Spring Security enforces role-restricted HTTP access. The application uses session-based authentication rather than bearer-token authentication.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph Browser["Browser: React + Vite"]
+    subgraph Frontend["React + Vite"]
         UI["Role-based dashboards"]
-        Map["Leaflet incident and route map"]
+        Map["Leaflet map"]
+        API["HTTP and STOMP clients"]
         UI --> Map
+        UI --> API
     end
 
-    subgraph App["Spring Boot application"]
-        Security["Spring Security<br/>session, roles, CSRF"]
-        HTTP["REST controllers"]
-        Services["Services and workflow logic"]
-        STOMP["STOMP broker<br/>/resqnet"]
-        Security --> HTTP
-        HTTP --> Services
-        Services --> STOMP
+    subgraph Backend["Spring Boot"]
+        Security["Spring Security"]
+        Controllers["REST controllers"]
+        Services["Business services"]
+        Realtime["WebSocket / STOMP"]
+        Security --> Controllers
+        Controllers --> Services
+        Services --> Realtime
     end
 
-    DB[("MongoDB replica set<br/>documents and GridFS images")]
-    Gemini["Google Gemini API<br/>image assessment"]
-    Geo["OpenStreetMap Nominatim<br/>reverse geocoding"]
-    Router["Public OSRM router<br/>route geometry"]
+    DB[("MongoDB + GridFS")]
+    AI["Google Gemini API"]
+    Geo["Nominatim geocoding"]
+    Routes["OSRM route service"]
     Tiles["OpenStreetMap tiles"]
 
-    UI -->|"HTTP via Vite proxy<br/>session cookies + CSRF"| Security
-    UI <-->|"STOMP over WebSocket"| STOMP
-    Services --> DB
-    Services -->|"async multimodal request"| Gemini
-    Services -->|"resolve incident state"| Geo
-    Services -->|"calculate driving route"| Router
-    Map -->|"map tiles"| Tiles
+    API -->|"HTTP / session / CSRF"| Security
+    API <-->|"WebSocket / STOMP"| Realtime
+    Services <--> DB
+    Services --> AI
+    Services --> Geo
+    Services --> Routes
+    Map --> Tiles
 ```
 
-The Vite development server proxies the application paths and `/resqnet` WebSocket to the backend. The backend stores incident, user, station, resource, dispatch, backup, and recall records in MongoDB; uploaded image content is stored in GridFS. External map, geocoding, route, and AI services are not bundled with the application.
+The frontend provides separate dashboards for each role. The backend owns workflow logic, authorization, persistence, assignment decisions, and simulation state. External services provide AI-assisted image assessment, reverse geocoding, route geometry, and map tiles.
+
+MongoDB stores application documents, while GridFS stores uploaded image content. The Vite development server proxies backend HTTP paths and the `/resqnet` WebSocket endpoint.
 
 ## End-to-end workflows
 
-### Report, analyze, and review
+### 1. Incident reporting and AI-assisted assessment
 
-1. A signed-in user submits an image, latitude, longitude, and a one-word alphabetic `userReport` label to `POST /disaster/report`.
-2. The backend stores the image in GridFS and the report in MongoDB, then attempts reverse geocoding through OpenStreetMap Nominatim. If that lookup is unavailable, it tries to infer the state from the nearest stored station.
-3. Before invoking the AI service, the backend searches recent, geographically nearby incidents. A matching report is linked to the existing incident and contributes to its report count; it does not start a second AI analysis.
-4. For a non-duplicate, asynchronous Gemini analysis supplies structured confidence, severity, disaster-type, and force estimates. The backend calculates a final confidence value from the AI confidence, reporter trust score, and report count; low values mark the incident as suspicious.
-5. An administrator receives an incident for review and can edit the generated fields before approving or rejecting it. Failed AI runs are retried by scheduled processing; after five recorded failures the incident is marked for manual review.
+1. An authenticated user submits an incident photograph, latitude, longitude, and a one-word alphabetic `userReport` label through `POST /disaster/report`.
+2. The backend stores the image in GridFS and the incident document in MongoDB.
+3. The backend attempts reverse geocoding through OpenStreetMap Nominatim to resolve the incident's state or locality. If the lookup is unavailable, it attempts to infer the state from the nearest stored station.
+4. Duplicate detection checks recent incidents against the configured time and geographic constraints. A matching report links to the existing incident and updates its report count instead of initiating another AI assessment.
+5. For a non-duplicate report, asynchronous Gemini analysis produces structured estimates of confidence, severity, disaster type, and response forces.
+6. The backend calculates a final confidence value using AI confidence, reporter trust, and report count. Low-confidence reports can be flagged as suspicious.
+7. Administrators review the incident and can edit the assessment before approving or rejecting it.
 
-### Review, station assignment, and field response
+AI processing failures are handled by scheduled retry logic. After the configured retry limit is exhausted, the incident is marked for manual review.
 
-1. Approval marks the incident `VERIFIED` and derives a baseline vehicle/personnel request from severity, adjusted by the final-confidence multiplier.
-2. For each required force, ResQNet searches active matching stations near the incident, excluding stations previously rejected for that incident. The closest candidate receives a dispatch; if no eligible station is available for a force, the incident is flagged with `DISPATCH_FAILED`.
-3. A station manager approves or rejects the mission. Approval checks station resources and worker availability, reserves the assigned resources, assigns a worker, and changes the dispatch to `DISPATCH_ASSIGNED`. Rejection records that station as rejected and attempts to route the mission to another eligible station.
-4. The assigned worker starts the dispatch. ResQNet requests driving-route geometry from the public OSRM router, stores the route, and advances a simulated vehicle along it. A worker can report completion or a false alarm after the simulation reaches the destination.
-5. A station manager confirms completion or a false alarm. Confirmed completion releases the station resources; the incident becomes `COMPLETED` after its dispatches and backups are no longer active. A confirmed false alarm cancels the dispatch and updates the incident only when no other active dispatch remains.
+### 2. Administrative review and station assignment
 
-### Backup and recall
+1. An administrator reviews an incident and approves or rejects it.
+2. Approval marks the incident `VERIFIED` and derives a baseline vehicle and personnel requirement from severity, adjusted using final confidence.
+3. For each required response force, the backend searches for nearby active stations that support that force and have not previously been rejected for the incident.
+4. The closest eligible station is selected. If no eligible station is available for a required force, the incident is flagged with `DISPATCH_FAILED`.
+5. The station manager reviews the mission and either approves or rejects it.
+6. Approval checks resource and worker availability, reserves the required resources, assigns a worker, and transitions the dispatch to `DISPATCH_ASSIGNED`.
+7. Rejection records the station as rejected for that incident and allows the assignment process to try another eligible station.
 
-- A worker may request backup for an arrived, active dispatch. The station manager reviews the requested vehicles and personnel; approval reserves those resources and creates a separate backup dispatch so the original mission can continue.
-- A worker may request recall for an arrived, dispatched unit. The station manager can approve or reject the request. Approval atomically claims the pending recall, restores the dispatch's resources, marks the dispatch `RECALLED`, stops its simulation, and notifies the worker and dashboards. A rejected recall leaves the mission running.
+### 3. Worker dispatch and route simulation
 
-### Principal incident and dispatch states
+1. A worker receives an assigned dispatch and starts the mission.
+2. The backend requests driving-route geometry from the public OSRM routing service.
+3. The route is validated, stored, and advanced by a scheduled simulation task.
+4. The simulation persists dispatch-location progress and sends updates to connected dashboards.
+5. Worker actions such as completion, false-alarm reporting, backup requests, and recall requests follow the configured dispatch lifecycle and authorization checks.
+6. A station manager confirms completion or a false alarm before the corresponding downstream workflow is finalized.
 
-The implementation keeps incident, assignment, AI, backup, and recall state in separate enums. A typical incident path is:
+**Vehicle movement is simulated.** ResQNet does not claim to receive real GPS telemetry from emergency vehicles.
+
+### 4. Backup and recall
+
+**Backup requests**
+
+- A worker can request backup for an eligible active dispatch after arrival.
+- The station manager reviews the requested vehicles and personnel.
+- An approved backup request reserves resources and creates a separate backup dispatch.
+- The original mission continues independently of the backup dispatch.
+
+**Recall requests**
+
+- A worker can request recall for an eligible dispatched unit after arrival.
+- The station manager can approve or reject the request.
+- An approved recall claims the pending request, restores the relevant station resources, marks the dispatch `RECALLED`, stops its simulation, and notifies the relevant dashboards.
+- A rejected recall leaves the mission running.
+
+These workflows use separate dispatch and request records where applicable. Their exact transitions are defined by the application's status enums and service logic.
+
+## State management
+
+ResQNet keeps incident, AI, assignment, dispatch, backup, and recall states separate. A simplified incident lifecycle is:
 
 ```text
-REPORTED -> AI_PROGRESS -> UNDER_REVIEW -> VERIFIED
-         -> DISPATCH_ASSIGNED -> DISPATCHED
-         -> DISPATCH_COMPLETED -> COMPLETED
+REPORTED
+   |
+   v
+AI_PROGRESS
+   |
+   v
+UNDER_REVIEW
+   |
+   +----> REJECTED
+   |
+   v
+VERIFIED
+   |
+   v
+DISPATCH ASSIGNMENT
+   |
+   v
+DISPATCHED
+   |
+   +----> DISPATCH_FALSE / DISPATCH_CANCELLED
+   |
+   v
+DISPATCH_COMPLETED
+   |
+   v
+COMPLETED
 ```
 
-Other implemented states include `ALREADY_PRESENT`, `REJECTED`, `DISPATCH_FAILED`, `DISPATCH_FALSE`, `DISPATCH_CANCELLED`, `BACKUP_REQUEST`, `BACKUP_ASSIGNED`, `BACKUP_DISPATCHED`, `BACKUP_DISPATCH_COMPLETED`, and `RECALLED`. These are not all interchangeable steps in one linear state machine; several represent per-dispatch or exceptional outcomes.
+The diagram is illustrative rather than a complete state machine. Actual transitions depend on the workflow and may be represented by separate per-dispatch states.
+
+Other implemented states include `ALREADY_PRESENT`, `DISPATCH_FAILED`, `DISPATCH_ASSIGNED`, `DISPATCH_FALSE`, `DISPATCH_CANCELLED`, `BACKUP_REQUEST`, `BACKUP_ASSIGNED`, `BACKUP_DISPATCHED`, `BACKUP_DISPATCH_COMPLETED`, and `RECALLED`.
 
 ## Technology stack
 
-| Area | Technologies and versions in project files |
-| --- | --- |
-| Backend | Java 25; Spring Boot 4.1.1; Spring AI 2.0.0; Maven Wrapper 3.3.4 using Maven 3.9.16 |
-| Persistence | MongoDB with Spring Data MongoDB; MongoDB GridFS for uploaded image content |
-| Backend integrations | Spring MVC, Spring Security, Spring WebSocket/STOMP, Spring WebFlux `WebClient`, Jakarta Validation, Lombok 1.18.48 |
-| Frontend | React `^18.3.1`, React DOM `^18.3.1`, React Router `^6.26.2` (lockfile: 6.30.6), Vite `^5.4.8` (lockfile: 5.4.21) |
-| Mapping and messaging | Leaflet `^1.9.4`, `@stomp/stompjs` `^7.5.0` |
-| UI icons | `lucide-react` 0.441.0 |
+| Area | Technology |
+|---|---|
+| Language | Java 25 |
+| Backend framework | Spring Boot 4.1.1 |
+| AI integration | Spring AI 2.0.0 and Google Gemini |
+| Persistence | MongoDB and Spring Data MongoDB |
+| File storage | MongoDB GridFS |
+| Security | Spring Security, session authentication, BCrypt, CSRF |
+| HTTP APIs | Spring MVC |
+| Real-time communication | Spring WebSocket and STOMP |
+| HTTP client | Spring WebFlux `WebClient` |
+| Frontend | React 18, React DOM 18, React Router 6 |
+| Frontend tooling | Vite 5 and npm |
+| Interactive maps | Leaflet and OpenStreetMap tiles |
+| Route geometry | Public OSRM routing service |
+| Reverse geocoding | OpenStreetMap Nominatim |
+| Backend build | Maven Wrapper |
 
-The versions above come from `pom.xml`, `frontend/package.json`, `frontend/package-lock.json`, and the Maven wrapper properties. Frontend entries show the manifest's semver ranges and, where different, the lockfile's resolved version; they are not claims about deployed infrastructure.
-
-### External services
-
-| Service | Use in ResQNet |
-| --- | --- |
-| Google Gemini (`gemini-3-flash-preview`) | Image-based incident assessment through Spring AI; requires a Google GenAI API key. |
-| OpenStreetMap Nominatim | Reverse geocoding incident coordinates to a state or locality. |
-| Public OSRM router (`router.project-osrm.org`) | Driving-route geometry used by the dispatch simulation. |
-| OpenStreetMap tile service | Map tiles displayed by the browser dashboard. |
-
-These services are called over the network and are not local dependencies or guaranteed-availability components.
+The listed backend versions come from the uploaded README's project-file inspection. Frontend dependencies use the declared manifest ranges, with resolved versions recorded in the lockfile. They describe the project configuration, not a deployed production environment.
 
 ## Engineering highlights
 
-- **MongoDB geospatial data:** incident and station coordinates use GeoJSON points with `2dsphere` indexes. Duplicate detection uses a 500-metre geospatial query; station selection filters by active status and force before distance ordering.
-- **Document and file separation:** report metadata is stored as a MongoDB document, while image bytes are stored through GridFS and fetched by image ID.
-- **Role-aware workflows:** Spring Security enforces `USER`, `ADMIN`, `STATION_MANAGER`, and `WORKER` route access. Browser requests use session cookies and the CSRF token cookie/header flow.
-- **Asynchronous work and scheduled recovery:** AI assessment and station matching use async services. Scheduled jobs retry AI failures, escalate exhausted retries to manual review, and reassign timed-out administrator reviews.
-- **Route simulation:** OSRM route responses are validated for coordinate ranges, point count, and proximity to the assigned station and incident. A per-dispatch scheduled task advances the route every two seconds, persists progress, and sends location updates. Active simulations are checked for recovery when the application starts.
-- **Concurrency safeguards:** station, resource, and recall documents use Spring Data MongoDB version fields. Recall approval/rejection uses a conditional MongoDB update from `PENDING` to a terminal decision so competing approvals cannot restore the same resources twice.
-- **Transactions and error handling:** the application configures a `MongoTransactionManager`; several multi-document workflows are transactional. Services explicitly handle route-provider failures, simulation scheduling failures, and selected state conflicts. No application-wide `@ControllerAdvice` or `@ExceptionHandler` was found in the inspected source.
+### Geospatial queries
 
-The route movement is a **simulation**, not GPS telemetry from a real vehicle. Its tick interval is two seconds; its target duration is approximately 210 seconds for longer routes, subject to a minimum simulated speed.
+Incident and station coordinates use GeoJSON points with MongoDB `2dsphere` indexes. Geospatial queries support nearby-incident duplicate detection and station selection based on location, force compatibility, and station status.
+
+### Document and image persistence
+
+Incident metadata is stored in MongoDB documents, while uploaded image bytes are stored in GridFS. Image retrieval uses the stored image identifier, keeping image content separate from the main incident document.
+
+### Role-aware access and workflow boundaries
+
+Spring Security restricts HTTP endpoints by role. User, administrator, station-manager, and worker actions are handled by distinct controllers and services, allowing the backend to validate ownership, availability, and allowed state transitions.
+
+### Asynchronous processing and recovery
+
+AI assessment and station matching use asynchronous services. Scheduled jobs retry failed AI processing and reconsider timed-out administrator reviews. Active dispatch simulations are also checked for recovery when the application starts.
+
+### Route-based simulation
+
+The backend obtains route geometry from OSRM, validates route coordinates, and advances a simulated vehicle using scheduled tasks. Location progress is persisted and sent to connected dashboards at a two-second simulation tick.
+
+The target duration is approximately 210 seconds for longer routes, subject to the configured minimum simulated speed and actual route length.
+
+### Concurrency safeguards
+
+Spring Data MongoDB version fields and conditional updates protect selected concurrent workflows. Recall decisions use a conditional transition from `PENDING` to a terminal decision so competing decisions cannot independently restore the same resources.
+
+### Transactions and failure handling
+
+The application configures a `MongoTransactionManager`, and selected multi-document workflows use transactions. Route-provider failures, simulation scheduling failures, and selected state conflicts have explicit handling.
+
+These engineering details describe the implementation; they do not imply that every possible failure mode has been tested or that the application is production-hardened.
 
 ## Repository structure
 
 ```text
 ResQNet/
-├── .mvn/wrapper/                 # Maven Wrapper configuration
-├── mvnw, mvnw.cmd                # Unix and Windows Maven Wrapper launchers
-├── pom.xml                       # Backend dependencies, Java and Spring versions
+├── .mvn/
+│   └── wrapper/                 # Maven Wrapper configuration
+├── mvnw
+├── mvnw.cmd
+├── pom.xml                      # Backend dependencies and build settings
 ├── src/
-│   ├── main/java/com/dev/ResQNet/
-│   │   ├── *Controller.java      # REST endpoints and request handling
-│   │   ├── *Service*.java        # Report, review, station, AI and dispatch workflows
-│   │   ├── *Repo.java            # MongoDB repositories
-│   │   ├── *Entity.java          # MongoDB documents
-│   │   ├── *Dto.java             # API and WebSocket payloads
-│   │   ├── *Config.java          # Security, WebSocket, async and scheduler setup
-│   │   └── *Service.java         # Routing, geocoding and dispatch simulation
-│   ├── main/resources/
-│   │   ├── application*.properties
-│   │   └── static/               # Vite build output served as Spring static assets
+│   ├── main/
+│   │   ├── java/com/dev/ResQNet/
+│   │   │   ├── *Controller.java # HTTP endpoints
+│   │   │   ├── *Service*.java   # Workflow and business logic
+│   │   │   ├── *Repo.java       # MongoDB repositories
+│   │   │   ├── *Entity.java     # Persistent domain documents
+│   │   │   ├── *Dto.java        # API and messaging payloads
+│   │   │   └── *Config.java     # Application configuration
+│   │   └── resources/
+│   │       ├── application*.properties
+│   │       └── static/          # Frontend build output
 │   └── test/java/com/dev/ResQNet/
-│       └── *Test.java            # Backend unit, MVC, workflow and integration tests
+│       └── *Test.java           # Backend tests
 └── frontend/
     ├── package.json
+    ├── package-lock.json
     ├── vite.config.js
     └── src/
-        ├── api/                  # Auth, REST and STOMP clients
-        ├── components/           # Shared dashboard components
-        ├── pages/                # User, admin, station, worker and auth pages
-        └── styles/               # Global and page-level styles
+        ├── api/                 # HTTP and STOMP clients
+        ├── components/          # Shared UI components
+        ├── pages/               # Role-specific dashboards
+        └── styles/              # Frontend styling
 ```
 
 ## Local setup and execution
 
-### Requirements
+The commands below follow the Windows development workflow documented for this project. Adjust paths and connection settings for your environment.
 
-- Java 25 and the included Maven Wrapper.
-- Node.js and npm compatible with the declared Vite 5 toolchain.
-- MongoDB and `mongosh`, with a replica set named `rs0`. The configured Spring transaction manager requires a replica-set deployment for MongoDB transactions.
-- A Google GenAI API key for the configured Gemini model.
-- Network access to the configured Gemini, Nominatim, OSRM, and OpenStreetMap tile services for their respective features.
+### Prerequisites
 
-### Start MongoDB
+- Java 25
+- The included Maven Wrapper
+- Node.js and npm compatible with the Vite toolchain
+- MongoDB with replica-set support and `mongosh`
+- A Google GenAI API key for the configured Gemini integration
+- Network access to the external AI, geocoding, routing, and map-tile services
 
-For a local Windows development instance, create a data directory and start `mongod` with the replica-set name used by the application:
+### 1. Start MongoDB
+
+For a local Windows development instance, create a data directory and start MongoDB with the replica-set name used by the application:
 
 ```powershell
 New-Item -ItemType Directory -Force C:\data\db
 mongod --dbpath C:\data\db --replSet rs0 --bind_ip localhost
 ```
 
-In a second terminal, initialize the replica set once:
+In another terminal, initialize the replica set once:
 
 ```powershell
 mongosh --eval "rs.initiate()"
 ```
 
-The development profile connects to `mongodb://localhost:27017/ResQNetdb?replicaSet=rs0`. If MongoDB is running elsewhere, update that URI in the local application configuration.
+The development profile uses:
 
-### Run the backend
+```text
+mongodb://localhost:27017/ResQNetdb?replicaSet=rs0
+```
 
-From the repository root, set the required key in the same terminal that starts Spring Boot:
+MongoDB transactions require a replica-set-capable deployment. If MongoDB runs elsewhere, update the local connection configuration accordingly.
+
+### 2. Configure the Gemini API key
+
+In the same PowerShell terminal used to launch the backend:
 
 ```powershell
 $env:GEMINI_API_KEY = "<your Google GenAI API key>"
+```
+
+Do not commit real API keys to source control or place them in public documentation.
+
+### 3. Start the backend
+
+From the repository root:
+
+```powershell
 .\mvnw.cmd spring-boot:run
 ```
 
-The configured development profile uses port `8080` by default. Do not put a real API key in the README, source control, or a committed properties file.
+The development configuration uses port `8080` by default.
 
-### Run the frontend
+### 4. Start the frontend
 
-In a separate terminal:
+Open a second terminal:
 
 ```powershell
 cd frontend
@@ -209,108 +323,148 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. The Vite configuration proxies the backend paths and the `/resqnet` WebSocket to `http://localhost:8080`. The frontend does not declare a separate API-base environment variable.
+Open:
 
-`npm run build` writes the production frontend bundle to `src/main/resources/static` (the Vite `outDir`); it is not needed for the Vite development-server workflow.
+```text
+http://localhost:5173
+```
 
-### Provisioning roles and station data
+The Vite development server proxies backend HTTP paths and the `/resqnet` WebSocket connection to the backend.
 
-Public registration creates accounts with the `USER` role only. Admin, station-manager, and worker dashboards require corresponding role assignments and MongoDB records for stations and resources. No database seeding or privileged-account provisioning script is included, so those records must be provisioned separately before exercising the complete response workflow.
+### 5. Build the frontend
 
-## Configuration and environment
+From the `frontend` directory:
 
-| Setting | Source | Purpose |
-| --- | --- | --- |
-| `spring.profiles.active=dev` | `src/main/resources/application.properties` | Selects the development profile by default. |
-| `spring.mongodb.uri` | `application-dev.properties` | MongoDB connection; defaults to local database `ResQNetdb` on replica set `rs0`. |
-| `GEMINI_API_KEY` | Environment variable referenced by `application-dev.properties` | Google GenAI API key used by Spring AI. No key is included in the repository. |
-| `spring.ai.google.genai.chat.model` | `application-dev.properties` | Configured model: `gemini-3-flash-preview`. |
-| External service URLs | Backend source | Nominatim and OSRM public endpoints are currently specified in code; OpenStreetMap tiles are loaded by the frontend. They are not configurable through documented environment variables. |
-| Frontend API origin | `frontend/vite.config.js` | Relative paths are proxied to the local backend at port `8080`; Vite serves the UI on port `5173`. |
+```powershell
+npm run build
+```
 
-`application-prod.properties` is present but contains no production-specific settings. The repository does not include a production deployment configuration.
+The configured Vite output directory is `src/main/resources/static`. A frontend build is not required when running the separate Vite development server.
+
+### Provisioning application roles and data
+
+Public registration creates accounts with the `USER` role. Administrator, station-manager, and worker workflows require appropriately provisioned roles and the corresponding station and resource records.
+
+The documented repository does not include a complete database seeding or privileged-account provisioning script. Provision those records separately before testing the complete incident-to-dispatch workflow.
+
+## Configuration and external services
+
+| Configuration | Purpose |
+|---|---|
+| `spring.profiles.active=dev` | Selects the development profile by default. |
+| `spring.mongodb.uri` | Configures the MongoDB connection in the development profile. |
+| `GEMINI_API_KEY` | Supplies credentials for the Google GenAI integration. |
+| `spring.ai.google.genai.chat.model` | Selects the configured Gemini model, `gemini-3-flash-preview`. |
+| Backend service URLs | Nominatim and OSRM endpoints are specified in backend source. |
+| Vite proxy configuration | Routes frontend API and WebSocket requests to the local backend. |
+
+External integrations:
+
+| Service | Purpose |
+|---|---|
+| Google Gemini | AI-assisted image-based incident assessment |
+| OpenStreetMap Nominatim | Reverse geocoding incident coordinates |
+| Public OSRM router | Driving-route geometry for dispatch simulation |
+| OpenStreetMap tile service | Map tiles in the frontend |
+
+These services are accessed over the network and are not bundled with ResQNet. Their availability, usage limits, response times, and terms are outside the application's control.
+
+The repository contains an `application-prod.properties` file, but the documented inspection did not identify production-specific settings. A production deployment configuration should not be assumed to exist.
 
 ## HTTP API overview
 
-The API uses session-based authentication rather than bearer-token authentication. `USER`, `ADMIN`, `STATION_MANAGER`, and `WORKER` below refer to the roles enforced by Spring Security. All paths are relative to the backend origin.
+The backend uses session-based authentication. The following table summarizes the routes documented in the project's controllers; all paths are relative to the backend origin.
 
-| Role | Method and path | Request / purpose |
-| --- | --- | --- |
-| Public | `GET /public/csrf` | Initialize the CSRF cookie for the browser client. |
-| Public | `POST /public/register` | JSON account registration (`email`, `username`, `password`); new accounts receive `USER`. |
-| Public | `POST /user/login` | Form URL-encoded `username` and `password`; establishes a session. |
-| Authenticated | `POST /logout` | Ends the session; include the CSRF header. |
-| Authenticated | `GET /user/me` | Current user's ID, username, and roles. |
-| Authenticated | `GET /user/stations` | Station coordinates and display data for the map. |
-| `USER` | `POST /disaster/report` | Multipart form fields: `image`, `latitude`, `longitude`, and alphabetic single-word `userReport`. |
-| `USER` | `GET /disaster/my-reports` | Reports submitted by the authenticated user. |
-| `USER`, `ADMIN` | `PATCH /disaster/{disasterId}/update` | JSON update of report fields. |
-| `ADMIN` | `GET /admin/disasters` | Assigned incidents and administrator statistics. |
-| `ADMIN` | `PATCH /admin/{disasterId}/update` | JSON update of incident assessment fields. |
-| `ADMIN` | `PATCH /admin/{disasterId}/approve` | Optional JSON assessment overrides; approve and initiate station assignment. |
+| Role | Method and endpoint | Purpose |
+|---|---|---|
+| Public | `GET /public/csrf` | Initialize the browser CSRF cookie. |
+| Public | `POST /public/register` | Register an account with `USER` role. |
+| Public | `POST /user/login` | Form-based login and session establishment. |
+| Authenticated | `POST /logout` | End the session; CSRF protection applies. |
+| Authenticated | `GET /user/me` | Retrieve current-user identity and roles. |
+| Authenticated | `GET /user/stations` | Retrieve station display data for the map. |
+| `USER` | `POST /disaster/report` | Submit an image-based incident report. |
+| `USER` | `GET /disaster/my-reports` | Retrieve the current user's reports. |
+| `USER`, `ADMIN` | `PATCH /disaster/{disasterId}/update` | Update supported report fields. |
+| `ADMIN` | `GET /admin/disasters` | Retrieve assigned incidents and statistics. |
+| `ADMIN` | `PATCH /admin/{disasterId}/update` | Update assessment fields. |
+| `ADMIN` | `PATCH /admin/{disasterId}/approve` | Approve an incident and initiate station assignment. |
 | `ADMIN` | `POST /admin/{disasterId}/reject` | Reject an incident report. |
-| `ADMIN` | `GET /fetch/image/{imageId}` | Retrieve an uploaded image from GridFS. |
-| `STATION_MANAGER` | `GET /station/missions` | Station missions and statistics. |
-| `STATION_MANAGER` | `/station/{dispatchId}/approve`, `/reject`, `/complete`, `/fake` | Dispatch decision or confirmation. Controllers accept `GET`, `POST`, and `PATCH`; the frontend uses `PATCH`. |
-| `STATION_MANAGER` | `GET /station/recall/pending` | Pending recall requests for the manager's station. |
-| `STATION_MANAGER` | `/station/recall/{recallId}/approve`, `/reject` | Decide a recall request. Controllers accept `GET`, `POST`, and `PATCH`; the frontend uses `PATCH`. |
-| `WORKER` | `GET /dispatch/assigned` | Assigned dispatches and backup requests. |
-| `WORKER` | `POST /dispatch/start/{dispatchId}` | Start an assigned dispatch simulation. |
-| `WORKER` | `POST /dispatch/backup/{dispatchId}/request` | JSON request with `reqVehicles` and `reqPersonnel`; allowed after arrival on an active dispatch. |
-| `WORKER` | `PATCH /dispatch/complete/{dispatchId}`, `PATCH /dispatch/false/{dispatchId}` | Report completion or a false alarm after arrival. |
-| `WORKER` | `POST /dispatch/recall/{dispatchId}` | Optional JSON body with a `reason`; request recall of an arrived dispatched unit. |
-| `WORKER` | `GET /dispatch/recall/active` | Recall requests submitted by the current worker. |
+| `ADMIN` | `GET /fetch/image/{imageId}` | Retrieve an uploaded GridFS image. |
+| `STATION_MANAGER` | `GET /station/missions` | Retrieve station missions and statistics. |
+| `STATION_MANAGER` | `/station/{dispatchId}/approve`, `/reject`, `/complete`, `/fake` | Review dispatches and confirm outcomes. |
+| `STATION_MANAGER` | `GET /station/recall/pending` | Retrieve pending station recall requests. |
+| `STATION_MANAGER` | `/station/recall/{recallId}/approve`, `/reject` | Decide recall requests. |
+| `WORKER` | `GET /dispatch/assigned` | Retrieve assigned dispatches and backup requests. |
+| `WORKER` | `POST /dispatch/start/{dispatchId}` | Start a dispatch simulation. |
+| `WORKER` | `POST /dispatch/backup/{dispatchId}/request` | Request backup with `reqVehicles` and `reqPersonnel`. |
+| `WORKER` | `PATCH /dispatch/complete/{dispatchId}` | Report dispatch completion. |
+| `WORKER` | `PATCH /dispatch/false/{dispatchId}` | Report a suspected false alarm. |
+| `WORKER` | `POST /dispatch/recall/{dispatchId}` | Request recall, optionally with a reason. |
+| `WORKER` | `GET /dispatch/recall/active` | Retrieve the current worker's recall requests. |
 
-`GET /disaster/csrf` is also implemented. State-changing browser requests use the CSRF cookie/header configured by Spring Security.
+The station decision and recall decision routes support the HTTP methods configured by their controllers; the frontend uses `PATCH`. Consult the controller implementations for exact request and response schemas before integrating another client.
+
+State-changing browser requests use the CSRF cookie/header flow configured by Spring Security.
 
 ## Real-time communication
 
-- **STOMP endpoint:** `/resqnet` (WebSocket). The simple broker is enabled for `/topic`, `/queue`, `/update`, and `/new`; user-specific destinations use the `/user` prefix.
-- **Subscriptions are role-gated** by the WebSocket security configuration: report queues for `USER`, disaster topics for `ADMIN`, mission updates for `STATION_MANAGER`, and mission/location messages for `WORKER`.
+ResQNet uses **STOMP over WebSocket** with the `/resqnet` endpoint and a simple broker configured for `/topic`, `/queue`, `/update`, and `/new`. User-specific destinations use the `/user` prefix.
 
-| User destination subscribed by frontend | Typical message flow |
-| --- | --- |
-| `/user/queue/report` | Reporter receives report, AI, review, and completion status messages. |
-| `/user/queue/dispatch-location` | Reporters receive simulated dispatch coordinates and arrival/status updates for linked reports. |
-| `/user/topic/disaster` | Administrators receive review assignments and incident/dispatch status notifications. |
-| `/user/update/mission` | Station managers receive dispatch, backup, and recall updates. |
-| `/user/new/mission` | Workers receive assignments and recall decisions. |
-| `/user/new/location` | A worker receives simulated route progress and arrival notification. |
+| Frontend subscription | Intended message flow |
+|---|---|
+| `/user/queue/report` | Reporter receives report, AI, review, and completion updates. |
+| `/user/queue/dispatch-location` | Reporter receives simulated dispatch coordinates and arrival/status updates for linked incidents. |
+| `/user/topic/disaster` | Administrator receives review assignments and incident/dispatch notifications. |
+| `/user/update/mission` | Station manager receives mission, backup, and recall updates. |
+| `/user/new/mission` | Worker receives mission assignments and recall decisions. |
+| `/user/new/location` | Worker receives simulated route progress and arrival notifications. |
 
-The admin UI also listens to broadcast `/topic/disaster`, and the station UI listens to broadcast `/update/mission`, alongside their user-specific subscriptions. The user and worker location/status flows use their `/user/...` destinations. Location updates are produced by the simulation service; they do not represent a live vehicle GPS feed.
+The administrator and station dashboards also subscribe to broadcast destinations where configured. The exact subscriptions and role authorization rules are defined by the WebSocket configuration and frontend STOMP clients.
 
-## Tests and verification
+**Real-time caveat:** The messaging architecture is implemented in code, but this README does not claim that every live delivery scenario has been manually verified.
 
-Backend tests are under `src/test/java/com/dev/ResQNet`. They cover registration and authenticated endpoints, duplicate detection, admin updates, station/worker dispatch workflows, backup and recall decisions (including concurrency cases), route parsing and simulation behavior, image retrieval, and an authenticated STOMP user-destination integration test.
+## Testing and verification
 
-Run the backend suite from the repository root after setting up MongoDB and `GEMINI_API_KEY`:
+Backend tests reside under:
+
+```text
+src/test/java/com/dev/ResQNet/
+```
+
+The uploaded project documentation identifies tests covering areas such as:
+
+- Registration and authenticated endpoints
+- Duplicate detection and administrator updates
+- Station and worker dispatch workflows
+- Backup and recall decisions, including concurrency cases
+- Route parsing and simulation behavior
+- Image retrieval
+- Authenticated STOMP user-destination integration
+
+Run the backend suite from the repository root after configuring the required environment:
 
 ```powershell
 .\mvnw.cmd test
 ```
 
-The frontend `package.json` defines `dev`, `build`, and `preview` scripts; it does not define a frontend test script. No test or build execution result is claimed in this README.
+The frontend manifest defines `dev`, `build`, and `preview` scripts. It does not define a frontend test script in the documented configuration.
 
-## Current limitations and possible next steps
+Test coverage and successful execution should be reported only from actual test results. The presence of tests does not by itself establish that every integration or live WebSocket scenario works in a running environment.
 
-**Verified limitations**
+## Current limitations and future improvements
 
-- The development profile is the only populated application profile. Production configuration and deployment instructions are not supplied.
-- Public Nominatim and OSRM endpoints are hard-coded; AI assessment also depends on the configured external Gemini service and API key.
-- Registration provisions only public `USER` accounts. The repository contains no seed script for privileged roles, stations, or station resources.
-- The UI's moving vehicle is a backend-driven route simulation, not a live positioning integration.
-- No centralized application-wide exception-advice class was found in the inspected backend source.
+Potential next steps, subject to project priorities:
 
-**Possible future improvements (not currently implemented)**
+- Add a repeatable development-data provisioning process for stations, resources, and privileged roles.
+- Add deployment-specific configuration, secret management, and operational monitoring.
+- Improve automated end-to-end coverage for multi-role workflows and real-time delivery.
+- Add resilience controls and monitoring for external AI, geocoding, and routing services.
+- Evaluate performance and concurrency behavior under realistic workloads.
+- Replace simulated vehicle movement with a verified telemetry integration if a suitable real-world integration becomes available.
 
-- Add repeatable development fixtures for stations, resources, and role-specific accounts.
-- Make geocoding and routing providers configurable and provide local test doubles for offline development.
-- Add production profile/deployment configuration and operational monitoring appropriate to the intended environment.
-- Add automated frontend tests for the reporting and role-specific dashboard workflows.
+These are possible improvements, not claims that the capabilities already exist.
 
-## Resume-ready project summary
+---
 
-- Built a multi-role disaster-management application with Spring Boot, MongoDB, session-based authorization, and React dashboards for reporters, administrators, station managers, and field workers.
-- Implemented image-backed incident reporting with GridFS, geospatial duplicate detection, and asynchronous Gemini-assisted assessment with scheduled retry and manual-review handling.
-- Developed station/resource-aware dispatch, backup, recall, completion, and false-alarm workflows, including MongoDB concurrency safeguards for recall decisions.
-- Integrated OSRM route geometry with scheduled vehicle-route simulation and STOMP/WebSocket updates rendered on a Leaflet map.
+**ResQNet** — Connecting incident reports, administrative decisions, station resources, and simulated field response in one workflow.
