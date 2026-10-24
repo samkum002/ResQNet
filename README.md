@@ -456,14 +456,9 @@ Test coverage and successful execution should be reported only from actual test 
 
 Potential next steps, subject to project priorities:
 
-- Add a repeatable development-data provisioning process for stations, resources, and privileged roles.
 - Add deployment-specific configuration, secret management, and operational monitoring.
-- Improve automated end-to-end coverage for multi-role workflows and real-time delivery.
-- Add resilience controls and monitoring for external AI, geocoding, and routing services.
 - Evaluate performance and concurrency behavior under realistic workloads.
 - Replace simulated vehicle movement with a verified telemetry integration if a suitable real-world integration becomes available.
-
-These are possible improvements, not claims that the capabilities already exist.
 
 ---
 
