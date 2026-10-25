@@ -186,6 +186,7 @@ Other implemented states include `ALREADY_PRESENT`, `DISPATCH_FAILED`, `DISPATCH
 | Route geometry | Public OSRM routing service |
 | Reverse geocoding | OpenStreetMap Nominatim |
 | Backend build | Maven Wrapper |
+| Testing | Spring Boot Test, JUnit, Spring Security Test, Spring MVC Test, Spring Data MongoDB Test, Spring WebSocket Test |
 
 The listed backend versions come from the uploaded README's project-file inspection. Frontend dependencies use the declared manifest ranges, with resolved versions recorded in the lockfile. They describe the project configuration, not a deployed production environment.
 
@@ -456,14 +457,9 @@ Test coverage and successful execution should be reported only from actual test 
 
 Potential next steps, subject to project priorities:
 
-- Add a repeatable development-data provisioning process for stations, resources, and privileged roles.
 - Add deployment-specific configuration, secret management, and operational monitoring.
-- Improve automated end-to-end coverage for multi-role workflows and real-time delivery.
-- Add resilience controls and monitoring for external AI, geocoding, and routing services.
 - Evaluate performance and concurrency behavior under realistic workloads.
 - Replace simulated vehicle movement with a verified telemetry integration if a suitable real-world integration becomes available.
-
-These are possible improvements, not claims that the capabilities already exist.
 
 ---
 
