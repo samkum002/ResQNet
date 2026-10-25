@@ -150,7 +150,7 @@ public class disasterController {
         }
         ObjectId userId = user.getUserId();
         disasterEntity disaster = new disasterEntity();
-        disaster.setUserReport(userReport);
+        disaster.setUserReport(userReport.trim());
         disaster.setUserId(userId);
         disaster.setStatus(Status.REPORTED);
         disaster.setCreatedAt(LocalDateTime.now());

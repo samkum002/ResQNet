@@ -233,7 +233,7 @@ public class adminDashboardServiceImpl implements adminDashboardService{
                 calculateFinalVal(rootDisaster.getDisasterId());
 
                 dnew.setStatus(Status.ALREADY_PRESENT);
-                dnew.setAssignmentStatus(Assignment.ASSIGNED);
+                dnew.setAssignmentStatus(Assignment.DUPLICATE);
                 dnew.setAssignedAdminId(rootDisaster.getAssignedAdminId());
                 dnew.setLinkedDisasterId(rootDisaster.getDisasterId());
                 DisasterRepo.save(dnew);
@@ -349,6 +349,13 @@ public class adminDashboardServiceImpl implements adminDashboardService{
         }
         Integer newTrucks = (int) Math.ceil((trucks*multiplier));
         Integer newPersonnel = (int) Math.ceil((personnel*multiplier));
+        boolean duplicate = checkDuplicateDisasters(disaster.getLocation().getY(), disaster.getLocation().getX(), disaster.getState(), disasterId);
+        if(duplicate){
+            userEntity admin = userrepo.findByUserId(disaster.getAssignedAdminId());
+            admin.setActiveIncidents(admin.getActiveIncidents()-1);
+            userrepo.save(admin);
+            return ResponseEntity.ok(new reportResponse(disaster.getDisasterId().toHexString(),"Duplicate report found.",disaster.getStatus()));
+        }
         disaster.setStatus(Status.VERIFIED);
         disaster.setAssignmentStatus(Assignment.APPROVED);
         DisasterRepo.save(disaster);
