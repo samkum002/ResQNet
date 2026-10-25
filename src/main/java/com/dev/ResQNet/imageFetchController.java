@@ -31,8 +31,18 @@ public class imageFetchController {
     public ResponseEntity<byte[]> fetchImage(@PathVariable ObjectId imageId) throws IOException{
         
         GridFSFile gfs = template.findOne(Query.query(Criteria.where("_id").is(imageId)));
+        if (gfs == null) {
+            return ResponseEntity.notFound().build();
+        }
         GridFsResource resource = template.getResource(gfs);
+        String contentType = resource.getContentType();
+        MediaType mediaType = MediaType.IMAGE_JPEG;
+        if (contentType != null && !contentType.isBlank()) {
+            try {
+                mediaType = MediaType.parseMediaType(contentType);
+            } catch (Exception ignored) {}
+        }
 
-        return ResponseEntity.ok().contentType(MediaType.parseMediaType(resource.getContentType())).body(resource.getInputStream().readAllBytes());
+        return ResponseEntity.ok().contentType(mediaType).body(resource.getInputStream().readAllBytes());
     }
 }

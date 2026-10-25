@@ -77,6 +77,15 @@ class ImageFetchEndpointMvcTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
+    void nonExistentImageReturnsNotFound() throws Exception {
+        when(gridFsTemplate.findOne(any(Query.class))).thenReturn(null);
+
+        mvc.perform(get("/fetch/image/{imageId}", new ObjectId().toHexString()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
     void malformedImageIdIsRejected() throws Exception {
         mvc.perform(get("/fetch/image/not-an-object-id"))
                 .andExpect(status().isBadRequest());

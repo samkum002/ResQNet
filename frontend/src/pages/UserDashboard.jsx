@@ -13,24 +13,49 @@ import { reportDisaster, fetchUserReports, fetchStations } from '../api/disaster
 import { createStompClient } from '../api/websocket';
 import './UserDashboard.css';
 
-const QUICK_TAGS = ['Fire', 'Flood', 'Earthquake', 'Landslide', 'Accident'];
+const QUICK_TAGS = [
+  'FIRE',
+  'LANDSLIDE',
+  'BUILDING COLLAPSE',
+  'EARTHQUAKE',
+  'ROAD ACCIDENT',
+  'ELECTRICAL HAZARD',
+];
+
+const SESSION_WINDOW_MS = 30 * 60 * 1000; // 30-minute session window
 
 function upsertReport(list, incoming) {
   if (!incoming || !incoming.disasterId) return list;
+  const now = Date.now();
+  const cutoff = now - SESSION_WINDOW_MS;
   const index = list.findIndex((r) => r.disasterId === incoming.disasterId);
+
   if (index === -1) {
-    return [incoming, ...list];
+    const createdMs = incoming.createdAt || now;
+    if (createdMs < cutoff) {
+      return list;
+    }
+    return [{ ...incoming, createdAt: createdMs }, ...list];
   }
+
+  const existingCreatedAt = list[index].createdAt || incoming.createdAt || now;
+  if (existingCreatedAt < cutoff) {
+    const filtered = list.filter((_, i) => i !== index);
+    return filtered;
+  }
+
   const next = [...list];
   next[index] = {
     ...next[index],
     ...incoming,
+    createdAt: existingCreatedAt,
     cause: incoming.cause || next[index].cause || 'Reported Incident',
     lat: incoming.lat ?? next[index].lat,
     lng: incoming.lng ?? next[index].lng,
-    time: incoming.time || next[index].time || new Date().toLocaleTimeString(),
+    time: incoming.time || next[index].time || new Date(existingCreatedAt).toLocaleTimeString(),
   };
-  return next;
+
+  return next.filter((r) => r.createdAt && r.createdAt >= cutoff);
 }
 
 export default function UserDashboard() {
@@ -79,21 +104,31 @@ export default function UserDashboard() {
         navigate('/login', { replace: true });
       } else {
         setUser(u);
-        // Load persistent reports from MongoDB
+        // Load persistent reports from MongoDB (filtered strictly to current 30-minute session)
         fetchUserReports()
           .then((data) => {
             if (Array.isArray(data)) {
-              setReports(
-                data.map((r) => ({
-                  disasterId: r.disasterId,
-                  status: r.status,
-                  msg: r.msg,
-                  cause: r.cause || 'Reported Incident',
-                  time: r.createdAt ? new Date(r.createdAt).toLocaleTimeString() : new Date().toLocaleTimeString(),
-                  lat: r.latitude,
-                  lng: r.longitude,
-                }))
-              );
+              const cutoff = Date.now() - SESSION_WINDOW_MS;
+              const sessionReports = data
+                .filter((r) => {
+                  if (!r.createdAt) return false;
+                  const t = new Date(r.createdAt).getTime();
+                  return !isNaN(t) && t >= cutoff;
+                })
+                .map((r) => {
+                  const createdMs = new Date(r.createdAt).getTime();
+                  return {
+                    disasterId: r.disasterId,
+                    status: r.status,
+                    msg: r.msg,
+                    cause: r.cause || 'Reported Incident',
+                    createdAt: createdMs,
+                    time: new Date(createdMs).toLocaleTimeString(),
+                    lat: r.latitude,
+                    lng: r.longitude,
+                  };
+                });
+              setReports(sessionReports);
             }
           })
           .catch((err) => console.warn('Failed to load user reports:', err));
@@ -130,6 +165,18 @@ export default function UserDashboard() {
         { enableHighAccuracy: true, timeout: 8000 }
       );
     }
+  }, []);
+
+  // 30-minute session cleanup timer: automatically prunes reports when they cross the 30-minute mark
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const cutoff = Date.now() - SESSION_WINDOW_MS;
+      setReports((prev) => {
+        const filtered = prev.filter((r) => r.createdAt && r.createdAt >= cutoff);
+        return filtered.length !== prev.length ? filtered : prev;
+      });
+    }, 10000);
+    return () => clearInterval(timer);
   }, []);
 
   // WebSocket / STOMP Connection
@@ -434,10 +481,31 @@ export default function UserDashboard() {
     }
   }, [mapReady, activeDispatches, coords, reports]);
 
+  const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+  const validateImageFile = (file) => {
+    if (!file) return false;
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setFormError('Image size exceeds the 10MB limit. Please choose a smaller photo.');
+      return false;
+    }
+    if (file.type && !ALLOWED_IMAGE_TYPES.includes(file.type.toLowerCase())) {
+      setFormError('Unsupported image format. Allowed formats: JPEG, PNG, WEBP, GIF.');
+      return false;
+    }
+    return true;
+  };
+
   // Handle Image Selection
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (!validateImageFile(file)) {
+        e.target.value = '';
+        return;
+      }
+      setFormError('');
       setSelectedImage(file);
       const url = URL.createObjectURL(file);
       setImagePreview(url);
@@ -537,7 +605,7 @@ export default function UserDashboard() {
   }, []);
 
   // Validate single alphabetic word
-  const isValidKeyword = /^[A-Za-z]+$/.test(keyword.trim());
+  const isValidKeyword = /^[A-Za-z_ ]+$/.test(keyword.trim());
 
   const handleRefreshLocation = () => {
     if ('geolocation' in navigator) {
@@ -571,7 +639,10 @@ export default function UserDashboard() {
       return;
     }
     if (!isValidKeyword) {
-      setFormError('Disaster cause must be exactly one alphabetic word (e.g. Fire, Flood).');
+      setFormError('Please select a valid disaster tag or enter an alphabetic cause.');
+      return;
+    }
+    if (!validateImageFile(selectedImage)) {
       return;
     }
 
@@ -586,14 +657,16 @@ export default function UserDashboard() {
         userReport: keyword.trim(),
       });
 
-      // Add to local reports timeline with deduplication
+      // Add to local reports timeline with deduplication and creation timestamp
+      const now = Date.now();
       setReports((prev) =>
         upsertReport(prev, {
           disasterId: response.disasterId,
           status: response.status || 'REPORTED',
           msg: response.msg || 'Transmitted to Command Center',
           cause: keyword.trim(),
-          time: new Date().toLocaleTimeString(),
+          createdAt: now,
+          time: new Date(now).toLocaleTimeString(),
           lat: coords.lat,
           lng: coords.lng,
         })
@@ -806,7 +879,7 @@ export default function UserDashboard() {
               />
               {keyword && (
                 <span className={`validation-badge ${isValidKeyword ? 'valid' : 'invalid'}`}>
-                  {isValidKeyword ? 'Valid Keyword' : 'Alpha Only'}
+                  {isValidKeyword ? 'Valid Tag' : 'Alpha/Tag Only'}
                 </span>
               )}
             </div>
